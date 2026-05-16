@@ -1,12 +1,12 @@
 // src/App.jsx
 import React, { useState } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
-import BuscarDonante from './pages/BuscarDonante';
-import Login from './pages/Login';
-import RegistrarDonante from './pages/RegistrarDonante';
-import CargarSerologia from './pages/CargarSerologia';
-import NotificarDonantes from './pages/NotificarDonantes';
-import Ajustes from './pages/Ajustes';
+import BuscarDonante from './Pages/BuscarDonante';
+import Login from './Pages/Login';
+import RegistrarDonante from './Pages/RegistrarDonante';
+import CargarSerologia from './Pages/CargarSerologia';
+import NotificarDonantes from './Pages/NotificarDonantes';
+import Ajustes from './Pages/Ajustes';
 import "./index.css"
 import "./App.css"
 
