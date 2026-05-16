@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta de colores de la clínica (HealthTech) */
+  /* Al nombrarlo así, Tailwind v4 autogenera la clase bg-panal-ligero */
+  --background-image-panal-ligero: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='1'/%3E%3C/svg%3E");
+  --color-med-bg: #F8FAFC;
+  /* Fondo gris ultra claro (slate-50) */
+  --color-med-surface: #FFFFFF;
+  /* Blanco puro para las tarjetas */
+  --color-med-text: #1E293B;
+  /* Gris pizarra oscuro para lectura cómoda */
+  --color-med-accent: #9F1239; 
+  /* rose-800: Un rojo sangre más oscuro y profundo para mejor contraste */
+  
+  --color-med-hover: #881337;  
+  /* rose-900: Para el efecto hover de los botones */
+  --color-med-blue: #1E40AF;
+  /* Azul médico para detalles o alertas */
+}
