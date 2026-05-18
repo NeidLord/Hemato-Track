@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerDonantes, obtenerMuestras, guardarMuestra, calcularDiasParaDonar, eliminarDonante, actualizarDonante } from '../utils/data';
 
-function BuscarDonante() {
+function BuscarDonante({ usuarioLogeado }) {
     const navigate = useNavigate();
     const [cedula, setCedula] = useState('');
     const [donante, setDonante] = useState(null);
@@ -42,13 +42,16 @@ function BuscarDonante() {
             donanteCedula: donante.cedula,
             donanteNombre: donante.nombre,
             ...datosMuestra,
+            // Si pusiste los checkboxes, aquí va el .join(', ')
             fechaRegistro: new Date().toISOString().split('T')[0],
-            estado: 'Pendiente'
+            estado: 'Pendiente',
+            bancoOrigen: usuarioLogeado?.banco || 'Desconocido', // Evita el crash si es nulo
+            hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin' // Evita el crash
         };
         guardarMuestra(muestra);
         actualizarDonante(donante.cedula, { fechaDonacion: muestra.fechaRegistro });
 
-        alert(`Extracción registrada con éxito. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena para análisis serológico.`);
+        alert(`Extracción registrada con éxito. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena.`);
         resetModalMuestra();
         setDonante(null);
         setCedula('');

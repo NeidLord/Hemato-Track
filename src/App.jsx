@@ -6,11 +6,12 @@ import Login from './Pages/Login';
 import RegistrarDonante from './Pages/RegistrarDonante';
 import CargarSerologia from './Pages/CargarSerologia';
 import NotificarDonantes from './Pages/NotificarDonantes';
+import PanelAdmin from './Pages/PanelAdmin';
 import Ajustes from './Pages/Ajustes';
 import "./index.css"
 import "./App.css"
 
-function Inicio({ onLogout }) {
+function Inicio({ usuarioLogeado, onLogout }) {
   const navigate = useNavigate();
 
   return (
@@ -25,20 +26,24 @@ function Inicio({ onLogout }) {
 
         <div className="relative z-10 max-w-5xl mx-auto">
 
-          {/* Header Superior - Ajustado para apilarse en móvil */}
+          {/* Header Superior - Limpio */}
           <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 sm:mb-12 border-b border-blue-800/50 pb-6">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="bg-white/10 p-2 sm:p-2.5 rounded-xl backdrop-blur-md border border-white/20 shadow-inner">
                 <span className="text-2xl sm:text-3xl">🩸</span>
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-wide">RegistroSanguíneo <span className="font-light text-blue-200">Pro</span></h1>
-                <p className="text-xs sm:text-sm text-blue-300 font-medium tracking-wider uppercase mt-0.5">LIMS • Hemoterapia</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-wide">
+                  Sistema <span className="font-light text-blue-200">Hemotransf</span>
+                </h1>
+                <p className="text-xs sm:text-sm text-blue-300 font-bold uppercase mt-0.5">
+                  {usuarioLogeado?.banco} • LIC. {usuarioLogeado?.nombre}
+                </p>
               </div>
             </div>
             <button
               onClick={onLogout}
-              className="w-full sm:w-auto justify-center text-sm font-bold text-blue-200 hover:text-white bg-blue-800/40 sm:bg-transparent hover:bg-white/10 px-4 py-3 sm:py-2 rounded-xl transition-all border border-blue-700 sm:border-transparent flex items-center gap-2"
+              className="w-full sm:w-auto justify-center text-sm font-bold text-blue-200 hover:text-white bg-blue-800/40 hover:bg-white/10 px-4 py-3 sm:py-2 rounded-xl transition-all border border-blue-700 sm:border-transparent flex items-center gap-2 cursor-pointer"
             >
               <span>Salir del Sistema</span> 🚪
             </button>
@@ -134,37 +139,55 @@ function Inicio({ onLogout }) {
   );
 }
 
-function RutaProtegida({ estaAutenticado, children }) {
-  if (!estaAutenticado) {
-    return <Navigate to="/login" replace />;
-  }
+function RutaProtegida({ usuario, children }) {
+  if (!usuario) return <Navigate to="/login" replace />;
   return children;
 }
 
 function App() {
-  const [estaAutenticado, setEstaAutenticado] = useState(() => {
-    return localStorage.getItem('lims_auth') === 'true';
+  // Ahora guardamos el objeto del usuario completo, no solo "true"
+  const [usuarioLogeado, setUsuarioLogeado] = useState(() => {
+    try {
+      const data = localStorage.getItem('lims_auth_user');
+      // Si por error se guardó el texto "undefined", lo descartamos
+      if (data === "undefined") {
+        localStorage.removeItem('lims_auth_user');
+        return null;
+      }
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      // Si la memoria tiene datos corruptos, la limpiamos y pedimos login de nuevo
+      localStorage.removeItem('lims_auth_user');
+      return null;
+    }
   });
 
-  const handleLogin = () => {
-    localStorage.setItem('lims_auth', 'true');
-    setEstaAutenticado(true);
+  const handleLogin = (userData) => {
+    localStorage.setItem('lims_auth_user', JSON.stringify(userData));
+    setUsuarioLogeado(userData);
   };
-
   const handleLogout = () => {
-    localStorage.removeItem('lims_auth');
-    setEstaAutenticado(false);
+    localStorage.removeItem('lims_auth_user');
+    setUsuarioLogeado(null);
   };
 
   return (
     <Routes>
-      <Route path="/login" element={estaAutenticado ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />} />
-      <Route path="/" element={<RutaProtegida estaAutenticado={estaAutenticado}> <Inicio onLogout={handleLogout} /> </RutaProtegida>} />
-      <Route path="/buscar" element={<RutaProtegida estaAutenticado={estaAutenticado}> <BuscarDonante /> </RutaProtegida>} />
-      <Route path="/registrar" element={<RutaProtegida estaAutenticado={estaAutenticado}> <RegistrarDonante /> </RutaProtegida>} />
-      <Route path="/serologias" element={<RutaProtegida estaAutenticado={estaAutenticado}> <CargarSerologia /> </RutaProtegida>} />
-      <Route path="/notificar" element={<RutaProtegida estaAutenticado={estaAutenticado}> <NotificarDonantes /> </RutaProtegida>} />
-      <Route path="/ajustes" element={<RutaProtegida estaAutenticado={estaAutenticado}> <Ajustes /> </RutaProtegida>} />
+      <Route path="/login" element={usuarioLogeado ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />} />
+
+      {/* LA RUTA RAIZ DECIDE: Si es admin muestra PanelAdmin, si es usuario muestra el LIMS operativo */}
+      <Route path="/" element={<RutaProtegida usuario={usuarioLogeado}>
+        {usuarioLogeado?.rol === 'admin'
+          ? <PanelAdmin usuarioAdmin={usuarioLogeado} onLogout={handleLogout} />
+          : <Inicio usuarioLogeado={usuarioLogeado} onLogout={handleLogout} />
+        }
+      </RutaProtegida>} />
+
+      <Route path="/buscar" element={<RutaProtegida usuario={usuarioLogeado}><BuscarDonante usuarioLogeado={usuarioLogeado} /></RutaProtegida>} />
+      <Route path="/registrar" element={<RutaProtegida usuario={usuarioLogeado}><RegistrarDonante /></RutaProtegida>} />
+      <Route path="/serologias" element={<RutaProtegida usuario={usuarioLogeado}><CargarSerologia /></RutaProtegida>} />
+      <Route path="/notificar" element={<RutaProtegida usuario={usuarioLogeado}><NotificarDonantes /></RutaProtegida>} />
+      <Route path="/ajustes" element={<RutaProtegida usuario={usuarioLogeado}><Ajustes /></RutaProtegida>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

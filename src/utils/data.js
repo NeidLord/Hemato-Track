@@ -88,3 +88,49 @@ export function calcularDiasParaDonar(ultimaDonacion) {
   const diasTranscurridos = Math.floor((hoy - ultima) / (1000 * 60 * 60 * 24));
   return 90 - diasTranscurridos;
 }
+
+
+
+// ... (tu código anterior queda intacto arriba) ...
+
+// --- NUEVA LÓGICA DE USUARIOS ---
+const STORAGE_KEY_USUARIOS = 'lims_usuarios';
+
+// Crea los administradores por defecto si es la primera vez que se abre el sistema
+export function inicializarUsuarios() {
+  if (!localStorage.getItem(STORAGE_KEY_USUARIOS)) {
+    const usuarios = [
+      { id: 'admin1', iniciales: 'ADMIN', nombre: 'Admin Lorenzo Hands', rol: 'admin', banco: 'Banco de Sangre Dr. Loranzo Hands', password: 'admin' },
+      { id: 'admin2', iniciales: 'ADMIN', nombre: 'Admin Miguel Patetta', rol: 'admin', banco: 'Banco de Sangre Dr. Miguel Patetta', password: 'admin' },
+      { id: 'admin3', iniciales: 'ADMIN', nombre: 'Admin José Luis Pérez', rol: 'admin', banco: 'Banco de Sangre Dr. José Luis Pérez', password: 'admin' }
+    ];
+    localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(usuarios));
+  }
+}
+
+export function obtenerUsuarios() {
+  inicializarUsuarios();
+  const datos = localStorage.getItem(STORAGE_KEY_USUARIOS);
+  return datos ? JSON.parse(datos) : [];
+}
+
+export function guardarUsuario(usuario) {
+  const usuarios = obtenerUsuarios();
+  // Validar que no se repitan las iniciales en el mismo banco
+  const existe = usuarios.find(u => u.iniciales.toLowerCase() === usuario.iniciales.toLowerCase() && u.banco === usuario.banco);
+  if (existe) {
+    return { exito: false, mensaje: 'Ya existe un hemoterapista con esas iniciales en este banco.' };
+  }
+
+  usuario.id = Date.now().toString();
+  usuarios.push(usuario);
+  localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(usuarios));
+  return { exito: true, mensaje: 'Hemoterapista registrado con éxito.' };
+}
+
+export function eliminarUsuario(id) {
+  const usuarios = obtenerUsuarios();
+  const filtrados = usuarios.filter(u => u.id !== id);
+  localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(filtrados));
+  return { exito: true, mensaje: 'Hemoterapista eliminado del sistema.' };
+}
