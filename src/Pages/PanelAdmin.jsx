@@ -10,21 +10,31 @@ function PanelAdmin({ usuarioAdmin, onLogout }) {
         cargarUsuarios();
     }, []);
 
-    const cargarUsuarios = () => {
+    // 1. Agregamos async y await
+    const cargarUsuarios = async () => {
         // El admin solo ve los usuarios de su propio banco
-        const todos = obtenerUsuarios();
+        const todos = await obtenerUsuarios();
         setUsuarios(todos.filter(u => u.banco === usuarioAdmin.banco && u.rol === 'usuario'));
     };
 
-    const handleRegistrar = (e) => {
+    // 2. Agregamos async y await
+    const handleRegistrar = async (e) => {
         e.preventDefault();
         const usrCompleto = { ...nuevoUsr, rol: 'usuario', banco: usuarioAdmin.banco };
-        const res = guardarUsuario(usrCompleto);
+        const res = await guardarUsuario(usrCompleto);
         if (res.exito) {
             setNuevoUsr({ nombre: '', iniciales: '', password: '' });
-            cargarUsuarios();
+            await cargarUsuarios();
         } else {
             alert(res.mensaje);
+        }
+    };
+
+    // 3. Función asíncrona para eliminar correctamente en Supabase
+    const handleEliminar = async (id) => {
+        if (confirm('¿Eliminar a este usuario?')) {
+            await eliminarUsuario(id);
+            await cargarUsuarios();
         }
     };
 
@@ -78,7 +88,8 @@ function PanelAdmin({ usuarioAdmin, onLogout }) {
                                     <p className="font-bold text-lg">{u.nombre}</p>
                                     <p className="text-sm text-slate-500">Iniciales: <span className="font-bold text-med-blue">{u.iniciales}</span></p>
                                 </div>
-                                <button onClick={() => { if (confirm('¿Eliminar a este usuario?')) { eliminarUsuario(u.id); cargarUsuarios(); } }} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-lg cursor-pointer">
+                                {/* Usamos la nueva función handleEliminar */}
+                                <button onClick={() => handleEliminar(u.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-lg cursor-pointer">
                                     🗑️ Dar de baja
                                 </button>
                             </div>

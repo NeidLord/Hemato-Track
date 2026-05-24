@@ -43,18 +43,50 @@ function RegistrarDonante() {
         }
     };
 
-    const handleSubmitDonante = (e) => {
+    // Guardar el donante
+    const handleSubmitDonante = async (e) => {
         e.preventDefault();
         const telefonoCompleto = `${formData.telefonoPrefijo}-${formData.telefonoCuerpo}`;
         const donante = { ...formData, telefono: telefonoCompleto };
-        const resultado = guardarDonante(donante);
+
+        // Agregamos await
+        const resultado = await guardarDonante(donante);
 
         if (resultado.exito) {
-            // EN LUGAR DE SALIR, ABRIMOS EL MODAL
             setMostrarModalMuestra(true);
         } else {
             alert(resultado.mensaje);
         }
+    };
+
+    // Guardar la bolsa
+    const handleGuardarMuestra = async (e) => {
+        e.preventDefault();
+
+        if (datosMuestra.tipoDonacion.length === 0) {
+            alert('⚠️ Debe seleccionar al menos un componente extraído.');
+            return;
+        }
+
+        const usuarioLogeado = JSON.parse(localStorage.getItem('lims_auth_user'));
+        const muestra = {
+            id: datosMuestra.codigoBolsa,
+            donanteCedula: formData.cedula,
+            donanteNombre: `${formData.nombre} ${formData.apellido}`,
+            ...datosMuestra,
+            tipoDonacion: datosMuestra.tipoDonacion.join(', '),
+            fechaRegistro: new Date().toISOString().split('T')[0],
+            estado: 'Pendiente',
+            bancoOrigen: usuarioLogeado?.banco || 'Desconocido',
+            hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin'
+        };
+
+        // Agregamos los await
+        await guardarMuestra(muestra);
+        await actualizarDonante(formData.cedula, { fechaDonacion: muestra.fechaRegistro });
+
+        alert(`Registro exitoso. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena para análisis serológico.`);
+        navigate('/buscar');
     };
 
     // --- LÓGICA DEL MODAL DE EXTRACCIÓN ---
@@ -74,36 +106,6 @@ function RegistrarDonante() {
     const handleCambioMuestra = (e) => {
         const { name, value } = e.target;
         setDatosMuestra({ ...datosMuestra, [name]: value });
-    };
-
-    const handleGuardarMuestra = (e) => {
-        e.preventDefault();
-
-        if (datosMuestra.tipoDonacion.length === 0) {
-            alert('⚠️ Debe seleccionar al menos un componente extraído.');
-            return;
-        }
-
-        // Obtenemos los datos de la sede y el licenciado en el momento exacto de guardar
-        const usuarioLogeado = JSON.parse(localStorage.getItem('lims_auth_user'));
-
-        const muestra = {
-            id: datosMuestra.codigoBolsa,
-            donanteCedula: formData.cedula, // Usamos la cédula del form que acabamos de llenar
-            donanteNombre: `${formData.nombre} ${formData.apellido}`,
-            ...datosMuestra,
-            tipoDonacion: datosMuestra.tipoDonacion.join(', '),
-            fechaRegistro: new Date().toISOString().split('T')[0],
-            estado: 'Pendiente',
-            bancoOrigen: usuarioLogeado?.banco || 'Desconocido',
-            hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin'
-        };
-
-        guardarMuestra(muestra);
-        actualizarDonante(formData.cedula, { fechaDonacion: muestra.fechaRegistro });
-
-        alert(`Registro exitoso. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena para análisis serológico.`);
-        navigate('/buscar'); // Ahora sí lo mandamos al buscador para que vea el expediente listo
     };
 
     return (
@@ -246,11 +248,11 @@ function RegistrarDonante() {
                                         <div className="flex flex-col gap-3">
                                             <label className="flex items-center gap-3 cursor-pointer">
                                                 <input type="checkbox" value="Sangre Total" checked={datosMuestra.tipoDonacion.includes('Sangre Total')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
-                                                <span className="font-medium text-sm">Sangre Total</span>
+                                                <span className="font-medium text-sm">Concentrado Globular (CG)</span>
                                             </label>
                                             <label className="flex items-center gap-3 cursor-pointer">
                                                 <input type="checkbox" value="Concentrado Plaquetario" checked={datosMuestra.tipoDonacion.includes('Concentrado Plaquetario')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
-                                                <span className="font-medium text-sm">Concentrado Plaquetario (Aféresis)</span>
+                                                <span className="font-medium text-sm">Concentrado Plaquetario (CP)</span>
                                             </label>
                                             <label className="flex items-center gap-3 cursor-pointer">
                                                 <input type="checkbox" value="Plasma Fresco Congelado" checked={datosMuestra.tipoDonacion.includes('Plasma Fresco Congelado')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />

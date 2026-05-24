@@ -1,4 +1,4 @@
-// src/pages/BuscarDonante.jsx
+// src/Pages/BuscarDonante.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerDonantes, obtenerMuestras, guardarMuestra, calcularDiasParaDonar, eliminarDonante, actualizarDonante } from '../utils/data';
@@ -17,39 +17,48 @@ function BuscarDonante({ usuarioLogeado }) {
         observaciones: ''
     });
 
-    const handleBuscar = (e) => {
+    const handleBuscar = async (e) => {
         e.preventDefault();
         setError('');
 
-        const donanteEncontrado = obtenerDonantes().find(d => d.cedula === cedula);
+        const donantes = await obtenerDonantes();
+        const donanteEncontrado = donantes.find(d => d.cedula === cedula);
 
         if (donanteEncontrado) {
             const diasParaDonar = calcularDiasParaDonar(donanteEncontrado.fechaDonacion);
-            const muestrasDonante = obtenerMuestras().filter(m => m.donanteCedula === cedula);
+            const todasLasMuestras = await obtenerMuestras();
+            const muestrasDonante = todasLasMuestras.filter(m => m.donanteCedula === cedula);
             const muestraProcesada = muestrasDonante.find(m => m.estado === 'Procesada');
             const grupoSanguineo = donanteEncontrado.grupoSanguineo || muestraProcesada?.grupoSanguineo;
-            setDonante({ ...donanteEncontrado, diasParaDonar, historial: muestrasDonante, grupoSanguineo });
+
+            // EVALUACIÓN CLÍNICA: Si CUALQUIER serología en su historia es Positiva, es No Apto Definitivo
+            const esNoApto = muestrasDonante.some(m => 
+                m.vih === 'Positivo' || m.sifilis === 'Positivo' || m.chagas === 'Positivo' ||
+                m.htlv === 'Positivo' || m.ch === 'Positivo' || m.av === 'Positivo' ||
+                m.coreb === 'Positivo' || m.hcv === 'Positivo'
+            );
+
+            setDonante({ ...donanteEncontrado, diasParaDonar, historial: muestrasDonante, grupoSanguineo, esNoApto });
         } else {
             setDonante(null);
             setError('Donante no encontrado en el sistema.');
         }
     };
 
-    const handleGuardarMuestra = (e) => {
+    const handleGuardarMuestra = async (e) => {
         e.preventDefault();
         const muestra = {
             id: datosMuestra.codigoBolsa,
             donanteCedula: donante.cedula,
             donanteNombre: donante.nombre,
             ...datosMuestra,
-            // Si pusiste los checkboxes, aquí va el .join(', ')
             fechaRegistro: new Date().toISOString().split('T')[0],
             estado: 'Pendiente',
-            bancoOrigen: usuarioLogeado?.banco || 'Desconocido', // Evita el crash si es nulo
-            hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin' // Evita el crash
+            bancoOrigen: usuarioLogeado?.banco || 'Desconocido', 
+            hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin' 
         };
-        guardarMuestra(muestra);
-        actualizarDonante(donante.cedula, { fechaDonacion: muestra.fechaRegistro });
+        await guardarMuestra(muestra);
+        await actualizarDonante(donante.cedula, { fechaDonacion: muestra.fechaRegistro });
 
         alert(`Extracción registrada con éxito. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena.`);
         resetModalMuestra();
@@ -72,9 +81,9 @@ function BuscarDonante({ usuarioLogeado }) {
         setMostrarModalMuestra(false);
     };
 
-    const handleEliminar = (cedula) => {
+    const handleEliminar = async (cedula) => {
         if (confirm('¿Está seguro que desea eliminar este donante? Esta acción no se puede deshacer.')) {
-            const resultado = eliminarDonante(cedula);
+            const resultado = await eliminarDonante(cedula);
             if (resultado.exito) {
                 alert(resultado.mensaje);
                 setDonante(null);
@@ -87,11 +96,10 @@ function BuscarDonante({ usuarioLogeado }) {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-8">
-
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🩸</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">RegistroSanguíneo Pro</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue transition-colors bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver al Inicio</span><span className="sm:hidden">Volver</span>
@@ -107,7 +115,6 @@ function BuscarDonante({ usuarioLogeado }) {
             </div>
 
             <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-20 sm:-mt-24 relative z-0">
-
                 <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-5 sm:p-6 border border-slate-100 mb-6 sm:mb-8">
                     <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-end">
                         <div className="flex-grow w-full">
@@ -171,30 +178,6 @@ function BuscarDonante({ usuarioLogeado }) {
                                             <p className="text-xs sm:text-sm text-slate-500 font-medium">Última Donación</p>
                                             <p className="font-semibold text-slate-800 text-sm sm:text-base">{donante.fechaDonacion || 'N/A'}</p>
                                         </div>
-                                        {donante.peso && (
-                                            <>
-                                                <div>
-                                                    <p className="text-xs sm:text-sm text-slate-500 font-medium">Peso</p>
-                                                    <p className="font-semibold text-slate-800 text-sm sm:text-base">{donante.peso} kg</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs sm:text-sm text-slate-500 font-medium">Altura</p>
-                                                    <p className="font-semibold text-slate-800 text-sm sm:text-base">{donante.altura} cm</p>
-                                                </div>
-                                            </>
-                                        )}
-                                        {donante.tieneTatuajes === 'si' && (
-                                            <div className="col-span-2">
-                                                <p className="text-xs sm:text-sm text-slate-500 font-medium">Tatuajes/Piercings</p>
-                                                <p className="font-semibold text-amber-600 text-sm">✓ Reciente (esperar 12 meses)</p>
-                                            </div>
-                                        )}
-                                        {donante.medicamentos === 'si' && (
-                                            <div className="col-span-2">
-                                                <p className="text-xs sm:text-sm text-slate-500 font-medium">Usa medicamentos</p>
-                                                <p className="font-semibold text-slate-800 text-sm">Sí - Revisar contraindicaciones</p>
-                                            </div>
-                                        )}
                                         {donante.enfermedades && (
                                             <div className="col-span-2">
                                                 <p className="text-xs sm:text-sm text-slate-500 font-medium">Enfermedades</p>
@@ -205,7 +188,13 @@ function BuscarDonante({ usuarioLogeado }) {
                                 </div>
 
                                 <div className="flex flex-col justify-center">
-                                    {(!donante.fechaDonacion || donante.diasParaDonar <= 0) ? (
+                                    {donante.esNoApto ? (
+                                        <div className="bg-red-50 border-2 border-red-200 p-5 sm:p-6 rounded-xl flex flex-col items-center text-center">
+                                            <span className="text-2xl sm:text-3xl mb-2">🚫</span>
+                                            <p className="text-red-800 font-bold text-base sm:text-lg mb-1">NO APTO DEFINITIVO</p>
+                                            <p className="text-red-600 text-xs sm:text-sm">Serología reactiva detectada en historial.</p>
+                                        </div>
+                                    ) : (!donante.fechaDonacion || donante.diasParaDonar <= 0) ? (
                                         <div className="bg-emerald-50 border-2 border-emerald-200 p-5 sm:p-6 rounded-xl flex flex-col items-center text-center">
                                             <span className="text-2xl sm:text-3xl mb-2">✅</span>
                                             <p className="text-emerald-800 font-bold text-base sm:text-lg mb-1">Apto para donar</p>
@@ -250,16 +239,23 @@ function BuscarDonante({ usuarioLogeado }) {
                                                         <p className="text-slate-400">Volumen</p>
                                                         <p className="font-medium text-slate-700">{m.volumen} ml</p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-slate-400">Grupo</p>
-                                                        <p className="font-medium text-slate-700">{m.grupoSanguineo || '-'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-slate-400">Serologías</p>
-                                                        <div className="flex gap-1">
-                                                            <span className={m.vih === 'Negativo' ? 'text-emerald-600' : m.vih === 'Positivo' ? 'text-red-600' : 'text-slate-400'}>VIH:{m.vih?.[0] || '-'}</span>
-                                                            <span className={m.sifilis === 'Negativo' ? 'text-emerald-600' : m.sifilis === 'Positivo' ? 'text-red-600' : 'text-slate-400'}>SIF:{m.sifilis?.[0] || '-'}</span>
-                                                            <span className={m.chagas === 'Negativo' ? 'text-emerald-600' : m.chagas === 'Positivo' ? 'text-red-600' : 'text-slate-400'}>CHA:{m.chagas?.[0] || '-'}</span>
+                                                    <div className="col-span-2">
+                                                        <p className="text-slate-400">Resultados Serológicos</p>
+                                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                                            {[
+                                                                { key: 'vih', label: 'VIH' }, { key: 'htlv', label: 'HTLV' },
+                                                                { key: 'ch', label: 'CH' }, { key: 'av', label: 'AV' },
+                                                                { key: 'coreb', label: 'COR' }, { key: 'hcv', label: 'HCV' },
+                                                                { key: 'sifilis', label: 'SIF' }
+                                                            ].map(s => {
+                                                                if (!m[s.key]) return null;
+                                                                const isPos = m[s.key] === 'Positivo';
+                                                                return (
+                                                                    <span key={s.key} className={isPos ? 'text-red-600 font-bold' : 'text-emerald-600'}>
+                                                                        {s.label}:{isPos ? 'P' : 'N'}
+                                                                    </span>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -273,6 +269,7 @@ function BuscarDonante({ usuarioLogeado }) {
                 )}
             </div>
 
+            {/* Modal Extracción se mantiene igual... */}
             {mostrarModalMuestra && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -284,18 +281,15 @@ function BuscarDonante({ usuarioLogeado }) {
                                 ×
                             </button>
                         </div>
-
                         <div className="p-4 sm:p-6 overflow-y-auto">
                             <p className="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6 leading-relaxed">
                                 Registre los datos de la extracción para el donante <strong className="text-slate-800">{donante?.nombre}</strong>. Esta bolsa ingresará a <strong className="text-orange-600">Cuarentena</strong>.
                             </p>
-
                             <form id="form-muestra" onSubmit={handleGuardarMuestra} className="space-y-4">
                                 <div>
                                     <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">ID Único de Bolsa (Escanear) *</label>
                                     <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. BOL-2026-X99" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all bg-blue-50 font-mono text-base sm:text-lg uppercase" />
                                 </div>
-
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Tipo de Donación</label>
@@ -310,26 +304,19 @@ function BuscarDonante({ usuarioLogeado }) {
                                         <input type="number" name="volumen" value={datosMuestra.volumen} onChange={handleCambioMuestra} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
                                     </div>
                                 </div>
-
                                 <div>
                                     <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Observaciones (Opcional)</label>
                                     <textarea name="observaciones" value={datosMuestra.observaciones} onChange={handleCambioMuestra} placeholder="Ej. Venas de difícil acceso..." rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all resize-none text-sm sm:text-base"></textarea>
                                 </div>
                             </form>
                         </div>
-
                         <div className="bg-slate-50 border-t border-slate-200 px-4 sm:px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
-                            <button type="button" onClick={() => setMostrarModalMuestra(false)} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 transition-all border-none bg-transparent cursor-pointer text-sm sm:text-base text-center">
-                                Cancelar
-                            </button>
-                            <button form="form-muestra" type="submit" className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-sm border-none cursor-pointer text-sm sm:text-base text-center">
-                                Enviar a Cuarentena
-                            </button>
+                            <button type="button" onClick={() => setMostrarModalMuestra(false)} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 transition-all border-none bg-transparent cursor-pointer text-sm sm:text-base text-center">Cancelar</button>
+                            <button form="form-muestra" type="submit" className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-sm border-none cursor-pointer text-sm sm:text-base text-center">Enviar a Cuarentena</button>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 }

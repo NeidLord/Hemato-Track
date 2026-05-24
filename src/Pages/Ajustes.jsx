@@ -1,5 +1,5 @@
-// src/pages/Ajustes.jsx
-import React, { useState, useMemo } from 'react';
+// src/Pages/Ajustes.jsx
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerDonantes, obtenerMuestras } from '../utils/data';
 
@@ -17,57 +17,61 @@ function Ajustes() {
     const [mostrarModalLimpiar, setMostrarModalLimpiar] = useState(false);
     const [tipoLimpiar, setTipoLimpiar] = useState('');
 
-    const stats = useMemo(() => {
-        const donors = obtenerDonantes();
-        const muestras = obtenerMuestras();
+    // --- CORREGIDO: Nuevo estado para manejar estadísticas en la nube ---
+    const [stats, setStats] = useState({
+        totalDonors: 0, totalMuestras: 0, procesadas: 0, pendientes: 0,
+        grupos: {}, serologiasPositivas: { vih: 0, sifilis: 0, chagas: 0 }, inventarioTotal: 0
+    });
 
-        const procesadas = muestras.filter(m => m.estado === 'Procesada');
-        const pendientes = muestras.filter(m => m.estado !== 'Procesada');
+    // --- CORREGIDO: UseEffect para recopilar datos de Supabase ---
+    useEffect(() => {
+        const cargarDatos = async () => {
+            const donors = await obtenerDonantes();
+            const muestras = await obtenerMuestras();
 
-        const grupos = {};
-        donors.forEach(d => {
-            if (d.grupoSanguineo) {
-                grupos[d.grupoSanguineo] = (grupos[d.grupoSanguineo] || 0) + 1;
-            }
-        });
+            const procesadas = muestras.filter(m => m.estado === 'Procesada');
+            const pendientes = muestras.filter(m => m.estado !== 'Procesada');
 
-        const serologiasPositivas = {
-            vih: procesadas.filter(m => m.vih === 'Positivo').length,
-            sifilis: procesadas.filter(m => m.sifilis === 'Positivo').length,
-            chagas: procesadas.filter(m => m.chagas === 'Positivo').length
+            const grupos = {};
+            donors.forEach(d => {
+                if (d.grupoSanguineo) {
+                    grupos[d.grupoSanguineo] = (grupos[d.grupoSanguineo] || 0) + 1;
+                }
+            });
+
+            const serologiasPositivas = {
+                vih: procesadas.filter(m => m.vih === 'Positivo').length,
+                sifilis: procesadas.filter(m => m.sifilis === 'Positivo').length,
+                chagas: procesadas.filter(m => m.chagas === 'Positivo').length
+            };
+
+            setStats({
+                totalDonors: donors.length,
+                totalMuestras: muestras.length,
+                procesadas: procesadas.length,
+                pendientes: pendientes.length,
+                grupos,
+                serologiasPositivas,
+                inventarioTotal: procesadas.reduce((acc, m) => acc + (parseInt(m.volumen) || 0), 0)
+            });
         };
-
-        return {
-            totalDonors: donors.length,
-            totalMuestras: muestras.length,
-            procesadas: procesadas.length,
-            pendientes: pendientes.length,
-            grupos,
-            serologiasPositivas,
-            inventarioTotal: procesadas.reduce((acc, m) => acc + (parseInt(m.volumen) || 0), 0)
-        };
+        cargarDatos();
     }, []);
 
+    // --- CORREGIDO: Candado de seguridad para la presentación ---
     const handleLimpiarDatos = () => {
-        if (tipoLimpiar === 'donantes') {
-            localStorage.removeItem('lims_donantes');
-            alert('Todos los donors han sido eliminados.');
-        } else if (tipoLimpiar === 'muestras') {
-            localStorage.removeItem('lims_muestras');
-            alert('Todos los registros de extracciones han sido eliminados.');
-        } else if (tipoLimpiar === 'todo') {
-            localStorage.removeItem('lims_donantes');
-            localStorage.removeItem('lims_muestras');
-            alert('Todos los datos han sido eliminados.');
-        }
+        alert('ℹ️ Por seguridad y para preservar la integridad de los datos en la presentación de grado, el borrado masivo ha sido desactivado en la versión de la nube.');
         setMostrarModalLimpiar(false);
         setTipoLimpiar('');
     };
 
-    const handleExportar = () => {
+    // --- CORREGIDO: Async para descargar los datos de la nube ---
+    const handleExportar = async () => {
+        const donors = await obtenerDonantes();
+        const muestras = await obtenerMuestras();
         const datos = {
-            donors: obtenerDonantes(),
-            muestras: obtenerMuestras(),
+            donors,
+            muestras,
             exportadoEn: new Date().toISOString()
         };
 
@@ -85,7 +89,7 @@ function Ajustes() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">⚙️</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">RegistroSanguíneo Pro</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>
@@ -157,8 +161,8 @@ function Ajustes() {
                             💾 Respaldo de Datos
                         </h3>
                         <p className="text-sm text-slate-500 mb-4">Exporte todos los datos del sistema en formato JSON para respaldo o transferencia.</p>
-                        <button onClick={handleExportar} className="w-full px-4 py-3 bg-med-blue hover:bg-blue-800 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2">
-                            📥 Exportar Datos
+                        <button onClick={handleExportar} className="w-full px-4 py-3 bg-med-blue hover:bg-blue-800 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
+                            📥 Exportar Datos (Nube)
                         </button>
                     </div>
 
@@ -167,7 +171,7 @@ function Ajustes() {
                             🗑️ Limpiar Datos
                         </h3>
                         <p className="text-sm text-slate-500 mb-4">Elimine datos del sistema. Esta acción no se puede deshacer.</p>
-                        <button onClick={() => setMostrarModalLimpiar(true)} className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2">
+                        <button onClick={() => setMostrarModalLimpiar(true)} className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
                             🗑️ Limpiar Datos
                         </button>
                     </div>
@@ -184,15 +188,15 @@ function Ajustes() {
                         </div>
                         <div>
                             <p className="text-slate-500">Versión</p>
-                            <p className="font-medium">1.0.0</p>
+                            <p className="font-medium">1.0.0 (Cloud Edition)</p>
                         </div>
                         <div>
-                            <p className="text-slate-500">Technología</p>
+                            <p className="text-slate-500">Tecnología</p>
                             <p className="font-medium">React + Tailwind CSS v4</p>
                         </div>
                         <div>
                             <p className="text-slate-500">Almacenamiento</p>
-                            <p className="font-medium">LocalStorage</p>
+                            <p className="font-medium">PostgreSQL (Supabase)</p>
                         </div>
                     </div>
                 </div>

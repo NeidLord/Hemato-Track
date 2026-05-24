@@ -1,136 +1,173 @@
-const STORAGE_KEY = 'lims_donantes';
-const STORAGE_KEY_MUESTRAS = 'lims_muestras';
+import { createClient } from '@supabase/supabase-js';
 
-export function obtenerDonantes() {
-  const datos = localStorage.getItem(STORAGE_KEY);
-  return datos ? JSON.parse(datos) : [];
-}
+// Vite lee automáticamente las variables de tu archivo .env
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
-export function obtenerDonantePorCedula(cedula) {
-  const donaciones = obtenerDonantes();
-  return donaciones.find(d => d.cedula === cedula);
-}
-
-export function guardarDonante(donante) {
-  const donaciones = obtenerDonantes();
-  const existe = donaciones.find(d => d.cedula === donante.cedula);
-  if (existe) {
-    return { exito: false, mensaje: 'Ya existe un donante con esta cédula.' };
+supabase.from('bancos').select('*', { count: 'exact', head: true }).then(({ error }) => {
+  if (error) {
+    console.error("🔴 ERROR DE CONEXIÓN A SUPABASE:", error.message);
+  } else {
+    console.log("🟢 CONEXIÓN A SUPABASE EXITOSA. Base de datos en línea.");
   }
-  donaciones.push(donante);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(donaciones));
+});
+
+// ==========================================
+// USUARIOS Y LOGIN
+// ==========================================
+export async function obtenerUsuarios() {
+  // Traemos los usuarios y cruzamos el ID para obtener el nombre del banco real
+  const { data, error } = await supabase
+    .from('usuarios')
+    .select(`*, bancos(nombre)`);
+
+  if (error) return [];
+
+  // Mapeamos para que la app lo siga entendiendo igual que cuando era local
+  return data.map(u => ({
+    id: u.id,
+    banco: u.bancos.nombre,
+    rol: u.rol,
+    iniciales: u.iniciales,
+    nombre: u.nombre,
+    password: u.password
+  }));
+}
+
+export async function guardarUsuario(usuario) {
+  const { data: banco } = await supabase.from('bancos').select('id').eq('nombre', usuario.banco).single();
+
+  const { error } = await supabase.from('usuarios').insert([{
+    banco_id: banco.id,
+    rol: usuario.rol,
+    iniciales: usuario.iniciales,
+    nombre: usuario.nombre,
+    password: usuario.password
+  }]);
+
+  if (error) {
+    if (error.code === '23505') return { exito: false, mensaje: 'Ya existe un hemoterapista con esas iniciales en este banco.' };
+    return { exito: false, mensaje: error.message };
+  }
+  return { exito: true, mensaje: 'Hemoterapista registrado con éxito.' };
+}
+
+export async function eliminarUsuario(id) {
+  const { error } = await supabase.from('usuarios').delete().eq('id', id);
+  if (error) return { exito: false, mensaje: 'Error al eliminar usuario.' };
+  return { exito: true, mensaje: 'Hemoterapista revocado del sistema.' };
+}
+
+// ==========================================
+// DONANTES
+// ==========================================
+export async function obtenerDonantes() {
+  const { data, error } = await supabase.from('donantes').select('*');
+  if (error) return [];
+
+  return data.map(d => ({
+    ...d,
+    fechaNacimiento: d.fecha_nacimiento,
+    grupoSanguineo: d.grupo_sanguineo,
+    fechaDonacion: d.fecha_ultima_donacion
+  }));
+}
+
+export async function guardarDonante(donante) {
+  const { error } = await supabase.from('donantes').insert([{
+    cedula: donante.cedula,
+    nombre: donante.nombre,
+    apellido: donante.apellido,
+    fecha_nacimiento: donante.fechaNacimiento,
+    sexo: donante.sexo,
+    telefono: donante.telefono,
+    correo: donante.correo,
+    direccion: donante.direccion,
+    enfermedades: donante.enfermedades
+  }]);
+
+  if (error) return { exito: false, mensaje: 'Error: Es posible que esta cédula ya esté registrada.' };
   return { exito: true, mensaje: 'Donante registrado exitosamente.' };
 }
 
-export function actualizarDonante(cedula, datosActualizados) {
-  const donaciones = obtenerDonantes();
-  const indice = donaciones.findIndex(d => d.cedula === cedula);
-  if (indice === -1) {
-    return { exito: false, mensaje: 'Donante no encontrado.' };
-  }
-  donaciones[indice] = { ...donaciones[indice], ...datosActualizados };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(donaciones));
-  return { exito: true, mensaje: 'Donante actualizado.' };
+export async function actualizarDonante(cedula, datosActualizados) {
+  let payload = {};
+  if (datosActualizados.fechaDonacion) payload.fecha_ultima_donacion = datosActualizados.fechaDonacion;
+  if (datosActualizados.grupoSanguineo) payload.grupo_sanguineo = datosActualizados.grupoSanguineo;
+
+  const { error } = await supabase.from('donantes').update(payload).eq('cedula', cedula);
+  if (error) return { exito: false, mensaje: 'Error al actualizar historial del donante.' };
+  return { exito: true, mensaje: 'Expediente actualizado.' };
 }
 
-export function eliminarDonante(cedula) {
-  const donaciones = obtenerDonantes();
-  const filtrados = donaciones.filter(d => d.cedula !== cedula);
-  if (filtrados.length === donaciones.length) {
-    return { exito: false, mensaje: 'Donante no encontrado.' };
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtrados));
-  return { exito: true, mensaje: 'Donante eliminado.' };
+export async function eliminarDonante(cedula) {
+  const { error } = await supabase.from('donantes').delete().eq('cedula', cedula);
+  if (error) return { exito: false, mensaje: 'No se puede eliminar: el donante tiene extracciones activas asociadas.' };
+  return { exito: true, mensaje: 'Donante eliminado correctamente.' };
 }
 
-export function obtenerMuestras() {
-  const datos = localStorage.getItem(STORAGE_KEY_MUESTRAS);
-  return datos ? JSON.parse(datos) : [];
+// ==========================================
+// EXTRACCIONES Y SEROLOGÍAS
+// ==========================================
+export async function obtenerMuestras() {
+  const { data, error } = await supabase.from('extracciones').select('*, usuarios(iniciales), bancos(nombre)');
+  if (error) return [];
+
+  return data.map(m => ({
+    id: m.codigo_bolsa,
+    donanteCedula: m.donante_cedula,
+    tipoDonacion: m.tipo_donacion,
+    volumen: m.volumen,
+    observaciones: m.observaciones,
+    fechaRegistro: m.fecha_registro,
+    estado: m.estado,
+    grupoSanguineo: m.grupo_sanguineo,
+    hiv: m.hiv, htlv: m.htlv, ch: m.ch, av: m.av, coreb: m.coreb, hcv: m.hcv, sifilis: m.sifilis,
+    hemoterapistaEncargado: m.usuarios?.iniciales,
+    bancoOrigen: m.bancos?.nombre
+  }));
 }
 
-export function guardarMuestra(muestra) {
-  const muestras = obtenerMuestras();
-  muestras.push(muestra);
-  localStorage.setItem(STORAGE_KEY_MUESTRAS, JSON.stringify(muestras));
-  return { exito: true, mensaje: 'Muestra registrada.' };
+export async function guardarMuestra(muestra) {
+  const { data: banco } = await supabase.from('bancos').select('id').eq('nombre', muestra.bancoOrigen).single();
+  const { data: user } = await supabase.from('usuarios').select('id').eq('iniciales', muestra.hemoterapistaEncargado).eq('banco_id', banco.id).single();
+
+  const { error } = await supabase.from('extracciones').insert([{
+    codigo_bolsa: muestra.id,
+    donante_cedula: muestra.donanteCedula,
+    banco_id: banco.id,
+    hemoterapista_id: user.id,
+    tipo_donacion: muestra.tipoDonacion,
+    volumen: parseInt(muestra.volumen),
+    observaciones: muestra.observaciones,
+    fecha_registro: muestra.fechaRegistro,
+    estado: muestra.estado
+  }]);
+
+  if (error) return { exito: false, mensaje: error.message };
+  return { exito: true, mensaje: 'Extracción enviada a cuarentena con éxito.' };
 }
 
-export function actualizarMuestra(muestraActualizada) {
-  const muestras = obtenerMuestras();
-  const indice = muestras.findIndex(m => m.id === muestraActualizada.id);
-  if (indice === -1) {
-    return { exito: false, mensaje: 'Muestra no encontrada.' };
-  }
-  muestras[indice] = muestraActualizada;
-  localStorage.setItem(STORAGE_KEY_MUESTRAS, JSON.stringify(muestras));
-  return { exito: true, mensaje: 'Muestra actualizada.' };
+export async function actualizarMuestra(muestra) {
+  const { error } = await supabase.from('extracciones').update({
+    estado: muestra.estado,
+    grupo_sanguineo: muestra.grupoSanguineo,
+    hiv: muestra.hiv, htlv: muestra.htlv, ch: muestra.ch, av: muestra.av, coreb: muestra.coreb, hcv: muestra.hcv, sifilis: muestra.sifilis,
+    fecha_analisis: muestra.fechaAnalisis
+  }).eq('codigo_bolsa', muestra.id);
+
+  if (error) return { exito: false, mensaje: 'Error al actualizar panel serológico.' };
+  return { exito: true, mensaje: 'Resultados de laboratorio guardados.' };
 }
 
-export function obtenerMuestraPorId(id) {
-  const muestras = obtenerMuestras();
-  return muestras.find(m => m.id === id);
-}
-
-export function eliminarMuestra(id) {
-  const muestras = obtenerMuestras();
-  const filtradas = muestras.filter(m => m.id !== id);
-  if (filtradas.length === muestras.length) {
-    return { exito: false, mensaje: 'Muestra no encontrada.' };
-  }
-  localStorage.setItem(STORAGE_KEY_MUESTRAS, JSON.stringify(filtradas));
-  return { exito: true, mensaje: 'Muestra eliminada.' };
-}
-
+// ==========================================
+// UTILIDADES CLÍNICAS
+// ==========================================
 export function calcularDiasParaDonar(ultimaDonacion) {
   if (!ultimaDonacion) return -90;
   const hoy = new Date();
   const ultima = new Date(ultimaDonacion);
   const diasTranscurridos = Math.floor((hoy - ultima) / (1000 * 60 * 60 * 24));
   return 90 - diasTranscurridos;
-}
-
-
-
-// ... (tu código anterior queda intacto arriba) ...
-
-// --- NUEVA LÓGICA DE USUARIOS ---
-const STORAGE_KEY_USUARIOS = 'lims_usuarios';
-
-// Crea los administradores por defecto si es la primera vez que se abre el sistema
-export function inicializarUsuarios() {
-  if (!localStorage.getItem(STORAGE_KEY_USUARIOS)) {
-    const usuarios = [
-      { id: 'admin1', iniciales: 'ADMIN', nombre: 'Admin Lorenzo Hands', rol: 'admin', banco: 'Banco de Sangre Dr. Loranzo Hands', password: 'admin' },
-      { id: 'admin2', iniciales: 'ADMIN', nombre: 'Admin Miguel Patetta', rol: 'admin', banco: 'Banco de Sangre Dr. Miguel Patetta', password: 'admin' },
-      { id: 'admin3', iniciales: 'ADMIN', nombre: 'Admin José Luis Pérez', rol: 'admin', banco: 'Banco de Sangre Dr. José Luis Pérez', password: 'admin' }
-    ];
-    localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(usuarios));
-  }
-}
-
-export function obtenerUsuarios() {
-  inicializarUsuarios();
-  const datos = localStorage.getItem(STORAGE_KEY_USUARIOS);
-  return datos ? JSON.parse(datos) : [];
-}
-
-export function guardarUsuario(usuario) {
-  const usuarios = obtenerUsuarios();
-  // Validar que no se repitan las iniciales en el mismo banco
-  const existe = usuarios.find(u => u.iniciales.toLowerCase() === usuario.iniciales.toLowerCase() && u.banco === usuario.banco);
-  if (existe) {
-    return { exito: false, mensaje: 'Ya existe un hemoterapista con esas iniciales en este banco.' };
-  }
-
-  usuario.id = Date.now().toString();
-  usuarios.push(usuario);
-  localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(usuarios));
-  return { exito: true, mensaje: 'Hemoterapista registrado con éxito.' };
-}
-
-export function eliminarUsuario(id) {
-  const usuarios = obtenerUsuarios();
-  const filtrados = usuarios.filter(u => u.id !== id);
-  localStorage.setItem(STORAGE_KEY_USUARIOS, JSON.stringify(filtrados));
-  return { exito: true, mensaje: 'Hemoterapista eliminado del sistema.' };
 }

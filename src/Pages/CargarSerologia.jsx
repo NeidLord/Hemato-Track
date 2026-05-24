@@ -11,27 +11,24 @@ function CargarSerologia() {
 
     const [datosSerologia, setDatosSerologia] = useState({
         grupoSanguineo: '',
-        vih: '',
-        sifilis: '',
-        chagas: '',
+        vih: '', htlv: '', ch: '', av: '', coreb: '', hcv: '', sifilis: '',
         observaciones: ''
     });
 
-    const handleBuscar = (e) => {
+    const handleBuscar = async (e) => {
         e.preventDefault();
         setError('');
 
-        const muestras = obtenerMuestras();
+        const muestras = await obtenerMuestras();
         const encontrada = muestras.find(m => m.id === codigoBolsa);
 
         if (encontrada) {
             setMuestra(encontrada);
             setDatosSerologia({
                 grupoSanguineo: encontrada.grupoSanguineo || '',
-                vih: encontrada.vih || '',
-                sifilis: encontrada.sifilis || '',
-                chagas: encontrada.chagas || '',
-                observaciones: encontrada.observaciones || ''
+                vih: encontrada.vih || '', htlv: encontrada.htlv || '', ch: encontrada.ch || '', 
+                av: encontrada.av || '', coreb: encontrada.coreb || '', hcv: encontrada.hcv || '', 
+                sifilis: encontrada.sifilis || '', observaciones: encontrada.observaciones || ''
             });
         } else {
             setMuestra(null);
@@ -44,7 +41,7 @@ function CargarSerologia() {
         setDatosSerologia(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleGuardar = (e) => {
+    const handleGuardar = async (e) => {
         e.preventDefault();
 
         const actualizada = {
@@ -54,13 +51,13 @@ function CargarSerologia() {
             fechaAnalisis: new Date().toISOString().split('T')[0]
         };
 
-        actualizarMuestra(actualizada);
+        await actualizarMuestra(actualizada);
 
         if (datosSerologia.grupoSanguineo) {
-            actualizarDonante(muestra.donanteCedula, { grupoSanguineo: datosSerologia.grupoSanguineo });
+            await actualizarDonante(muestra.donanteCedula, { grupoSanguineo: datosSerologia.grupoSanguineo });
         }
 
-        alert('Serologías guardadas correctamente.');
+        alert('Serologías completas guardadas correctamente.');
         setMuestra(null);
         setCodigoBolsa('');
     };
@@ -70,7 +67,7 @@ function CargarSerologia() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🧪</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">RegistroSanguíneo Pro</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>
@@ -81,7 +78,7 @@ function CargarSerologia() {
                 <div className="absolute inset-0 bg-panal-ligero bg-repeat opacity-100 pointer-events-none"></div>
                 <div className="relative z-10 max-w-4xl mx-auto">
                     <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Laboratorio Serológico</h1>
-                    <p className="text-rose-100 text-sm sm:text-lg">Cargue los resultados de análisis de laboratorio por código de bolsa.</p>
+                    <p className="text-rose-100 text-sm sm:text-lg">Cargue los 7 marcadores reglamentarios.</p>
                 </div>
             </div>
 
@@ -90,97 +87,56 @@ function CargarSerologia() {
                     <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-end">
                         <div className="flex-grow w-full">
                             <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Código de Bolsa</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">🔍</div>
-                                <input type="text" value={codigoBolsa} onChange={(e) => setCodigoBolsa(e.target.value)} placeholder="Ej. BOL-2026-X99" className="w-full pl-12 pr-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 transition-all text-base sm:text-lg uppercase font-mono" />
-                            </div>
+                            <input type="text" value={codigoBolsa} onChange={(e) => setCodigoBolsa(e.target.value)} placeholder="Ej. BOL-2026-X99" className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 uppercase font-mono" />
                         </div>
-                        <button type="submit" className="w-full sm:w-auto bg-med-accent hover:bg-rose-800 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer whitespace-nowrap h-[52px] sm:h-[56px]">
-                            Buscar Bolsa
+                        <button type="submit" className="w-full sm:w-auto bg-med-accent hover:bg-rose-800 text-white font-bold py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer">
+                            Buscar
                         </button>
                     </form>
-
-                    {error && (
-                        <div className="mt-5 sm:mt-6 bg-red-50 p-4 sm:p-6 rounded-xl border border-red-200 flex items-center gap-3">
-                            <span className="text-2xl">⚠️</span>
-                            <p className="font-bold text-sm sm:text-base text-red-700">{error}</p>
-                        </div>
-                    )}
                 </div>
 
                 {muestra && (
-                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="bg-slate-50 border-b border-slate-200 px-5 sm:px-8 py-4 sm:py-5">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                <div>
-                                    <h3 className="font-bold text-xl sm:text-2xl text-slate-800">Bolsa: {muestra.id}</h3>
-                                    <p className="text-slate-500 text-sm font-medium">Donante: {muestra.donanteNombre} (C.I: {muestra.donanteCedula})</p>
-                                </div>
-                                <div className="text-xs sm:text-sm text-slate-500">
-                                    Fecha extracción: {muestra.fechaRegistro}
+                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 sm:p-8">
+                        <form onSubmit={handleGuardar} className="space-y-6">
+                            {/* Grupo Sanguineo */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Grupo Sanguíneo</h4>
+                                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
+                                        <label key={g} className={`flex items-center justify-center py-2 rounded-lg border-2 cursor-pointer ${datosSerologia.grupoSanguineo === g ? 'border-med-accent bg-rose-50 text-med-accent font-bold' : 'border-slate-200'}`}>
+                                            <input type="radio" name="grupoSanguineo" value={g} checked={datosSerologia.grupoSanguineo === g} onChange={handleCambio} className="sr-only" />
+                                            {g}
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="p-5 sm:p-8">
-                            <form onSubmit={handleGuardar} className="space-y-6">
-                                <div>
-                                    <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2 mb-4">Grupo Sanguíneo</h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(grupo => (
-                                            <label key={grupo} className={`flex items-center justify-center py-3 rounded-xl border-2 cursor-pointer transition-all ${datosSerologia.grupoSanguineo === grupo ? 'border-med-accent bg-rose-100 text-med-accent font-bold' : 'border-slate-200 hover:border-med-accent'}`}>
-                                                <input type="radio" name="grupoSanguineo" value={grupo} checked={datosSerologia.grupoSanguineo === grupo} onChange={handleCambio} className="sr-only" />
-                                                {grupo}
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2 mb-4">Serologías</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div>
-                                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">VIH *</label>
-                                            <select name="vih" value={datosSerologia.vih} onChange={handleCambio} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent transition-all bg-white text-sm sm:text-base">
+                            {/* Las 7 Serologías */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Marcadores Serológicos</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {[
+                                        { key: 'vih', label: 'VIH' }, { key: 'htlv', label: 'HTLV' },
+                                        { key: 'ch', label: 'Chagas (CH)' }, { key: 'av', label: 'Antígeno V. (AV)' },
+                                        { key: 'coreb', label: 'Core B' }, { key: 'hcv', label: 'HCV' },
+                                        { key: 'sifilis', label: 'Sífilis' }
+                                    ].map(s => (
+                                        <div key={s.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                            <span className="text-sm font-medium">{s.label}</span>
+                                            <select name={s.key} value={datosSerologia[s.key]} onChange={handleCambio} className="px-3 py-1 rounded-lg border border-slate-300 bg-white text-sm" required>
                                                 <option value="">Seleccionar...</option>
                                                 <option value="Negativo">Negativo</option>
                                                 <option value="Positivo">Positivo</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Sífilis *</label>
-                                            <select name="sifilis" value={datosSerologia.sifilis} onChange={handleCambio} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent transition-all bg-white text-sm sm:text-base">
-                                                <option value="">Seleccionar...</option>
-                                                <option value="Negativo">Negativo</option>
-                                                <option value="Positivo">Positivo</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Chagas *</label>
-                                            <select name="chagas" value={datosSerologia.chagas} onChange={handleCambio} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent transition-all bg-white text-sm sm:text-base">
-                                                <option value="">Seleccionar...</option>
-                                                <option value="Negativo">Negativo</option>
-                                                <option value="Positivo">Positivo</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
+                            </div>
 
-                                <div>
-                                    <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Observaciones</label>
-                                    <textarea name="observaciones" value={datosSerologia.observaciones} onChange={handleCambio} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent transition-all resize-none text-sm sm:text-base"></textarea>
-                                </div>
-
-                                <div className="pt-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row justify-end gap-3 sm:gap-4">
-                                    <button type="button" onClick={() => { setMuestra(null); setCodigoBolsa(''); }} className="w-full sm:w-auto px-6 py-3 rounded-xl font-semibold text-slate-500 hover:bg-slate-100 bg-transparent border-none cursor-pointer text-sm sm:text-base">
-                                        Cancelar
-                                    </button>
-                                    <button type="submit" className="w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white bg-med-accent hover:bg-rose-800 transition-all shadow-md active:scale-95 border-none cursor-pointer text-sm sm:text-base">
-                                        Guardar Resultados
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                            <button type="submit" className="w-full bg-med-accent hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-all border-none cursor-pointer">
+                                Guardar Resultados Completos
+                            </button>
+                        </form>
                     </div>
                 )}
             </div>

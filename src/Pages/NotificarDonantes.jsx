@@ -1,5 +1,5 @@
-// src/pages/NotificarDonantes.jsx
-import React, { useState, useMemo } from 'react';
+// src/Pages/NotificarDonantes.jsx
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerDonantes, obtenerMuestras, calcularDiasParaDonar } from '../utils/data';
 
@@ -7,24 +7,31 @@ function NotificarDonantes() {
     const navigate = useNavigate();
     const [filtro, setFiltro] = useState('aptos');
     const [busqueda, setBusqueda] = useState('');
+    // --- CORREGIDO: Nuevo estado para manejar los datos async ---
+    const [donorsConEstado, setDonorsConEstado] = useState([]);
 
-    const donorsConEstado = useMemo(() => {
-        const donors = obtenerDonantes();
-        const muestras = obtenerMuestras();
+    // --- CORREGIDO: UseEffect para buscar en Supabase al abrir la pantalla ---
+    useEffect(() => {
+        const cargarDatos = async () => {
+            const donors = await obtenerDonantes();
+            const muestras = await obtenerMuestras();
 
-        return donors.map(d => {
-            const dias = calcularDiasParaDonar(d.fechaDonacion);
-            const muestrasDonante = muestras.filter(m => m.donanteCedula === d.cedula && m.estado === 'Procesada');
-            const grupo = d.grupoSanguineo || muestrasDonante[muestrasDonante.length - 1]?.grupoSanguineo;
-            return {
-                ...d,
-                diasParaDonar: dias,
-                puedeDonar: dias <= 0,
-                grupoSanguineo: grupo,
-                ultimaDonacion: d.fechaDonacion,
-                totalDonaciones: muestrasDonante.length
-            };
-        });
+            const procesados = donors.map(d => {
+                const dias = calcularDiasParaDonar(d.fechaDonacion);
+                const muestrasDonante = muestras.filter(m => m.donanteCedula === d.cedula && m.estado === 'Procesada');
+                const grupo = d.grupoSanguineo || muestrasDonante[muestrasDonante.length - 1]?.grupoSanguineo;
+                return {
+                    ...d,
+                    diasParaDonar: dias,
+                    puedeDonar: dias <= 0,
+                    grupoSanguineo: grupo,
+                    ultimaDonacion: d.fechaDonacion,
+                    totalDonaciones: muestrasDonante.length
+                };
+            });
+            setDonorsConEstado(procesados);
+        };
+        cargarDatos();
     }, []);
 
     const donorsFiltrados = useMemo(() => {
@@ -49,7 +56,7 @@ function NotificarDonantes() {
     }), [donorsConEstado]);
 
     const handleNotificar = (donante) => {
-        const mensaje = `Estimado/a ${donante.nombre}, le informamos que ya puede realizar una nueva donación de sangre. Su tipo ${donante.grupoSanguineo || 'desconocido'} es muy需求的. Acude al banco de sangre más cercano.`;
+        const mensaje = `Estimado/a ${donante.nombre}, le informamos que ya puede realizar una nueva donación de sangre. Su tipo ${donante.grupoSanguineo || 'desconocido'} es muy requerido. Acude al banco de sangre más cercano.`;
         alert(`📱 Mensaje preparado para ${donante.telefono}:\n\n${mensaje}`);
     };
 
@@ -58,7 +65,7 @@ function NotificarDonantes() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">✉️</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">RegistroSanguíneo Pro</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>

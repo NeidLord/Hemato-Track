@@ -4,22 +4,25 @@ import { obtenerUsuarios } from '../utils/data';
 
 function Login({ onLogin }) {
     const [rol, setRol] = useState('usuario');
+    
+    // 👇 ESTA LÍNEA FUE CORREGIDA (Debe coincidir exacto con la base de datos)
     const [banco, setBanco] = useState('Banco de Sangre Dr. Loranzo Hands');
+    
     const [iniciales, setIniciales] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    
+
     useEffect(() => {
         setError('');
         setIniciales('');
         setPassword('');
     }, [rol]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
+        setError('Conectando a la base de datos...'); 
 
-        const usuarios = obtenerUsuarios();
+        const usuarios = await obtenerUsuarios();
         let usuarioValido = null;
 
         if (rol === 'admin') {
@@ -31,14 +34,14 @@ function Login({ onLogin }) {
         if (usuarioValido) {
             onLogin(usuarioValido);
         } else {
-            setError('Credenciales incorrectas o acceso denegado para esta sede.');
+            setError('Credenciales incorrectas o acceso denegado.');
         }
     };
 
     return (
         <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-med-blue to-blue-900 flex items-center justify-center p-4 font-sans">
             <div className="absolute inset-0 bg-panal-ligero bg-repeat opacity-100 pointer-events-none"></div>
-            
+
             <div className="relative z-10 bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-100">
                 <div className="text-center mb-6">
                     <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -56,9 +59,10 @@ function Login({ onLogin }) {
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Seleccione la Sede</label>
                         <select value={banco} onChange={(e) => setBanco(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-med-blue bg-white">
-                            <option value="Banco de Sangre Dr. Loranzo Hands">Banco de Sangre Dr. Loranzo Hands</option>
-                            <option value="Banco de Sangre Dr. Miguel Patetta">Banco de Sangre Dr. Miguel Patetta</option>
-                            <option value="Banco de Sangre Dr. José Luis Pérez">Banco de Sangre Dr. José Luis Pérez</option>
+                            {/* El usuario ve "Unidad CHET", pero el sistema envía el value corto */}
+                            <option value="Banco de Sangre Dr. Loranzo Hands">Banco de Sangre Dr. Loranzo Hands Unidad CHET</option>
+                            <option value="Banco de Sangre Dr. Miguel Patetta">Banco de Sangre Dr. Miguel Patetta Queirolo</option>
+                            <option value="Banco de Sangre Dr. José Luis Pérez">Banco de Sangre Dr. José Luis Pérez Requejo</option>
                         </select>
                     </div>
 
