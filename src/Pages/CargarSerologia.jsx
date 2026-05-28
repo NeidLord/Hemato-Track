@@ -19,8 +19,14 @@ function CargarSerologia() {
         e.preventDefault();
         setError('');
 
+        // LA MAGIA ESTÁ AQUÍ: Forzamos mayúsculas y cortamos espacios fantasmas del celular
+        const terminoBusqueda = codigoBolsa.trim().toUpperCase();
+
         const muestras = await obtenerMuestras();
-        const encontrada = muestras.find(m => m.id === codigoBolsa || m.codigo_bolsa === codigoBolsa);
+        const encontrada = muestras.find(m => 
+            (m.id && m.id.toUpperCase() === terminoBusqueda) || 
+            (m.codigo_bolsa && m.codigo_bolsa.toUpperCase() === terminoBusqueda)
+        );
 
         if (encontrada) {
             setMuestra(encontrada);

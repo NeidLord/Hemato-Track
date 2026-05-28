@@ -6,18 +6,15 @@ import { obtenerDonantes, obtenerMuestras, guardarMuestra, calcularDiasParaDonar
 function BuscarDonante({ usuarioLogeado }) {
     const navigate = useNavigate();
     
-    // VERIFICACIÓN DE SEGURIDAD: Comprobamos si el usuario tiene rol de admin
     const authUser = usuarioLogeado || JSON.parse(localStorage.getItem('lims_auth_user')) || {};
     const esAdmin = authUser.rol === 'admin';
 
-    // Estados de búsqueda
     const [cedula, setCedula] = useState('');
     const [filtroGrupo, setFiltroGrupo] = useState('');
     
-    // Estados de resultados
-    const [donante, setDonante] = useState(null); // Para búsqueda individual
-    const [listaDonantes, setListaDonantes] = useState([]); // Para filtrado por grupo
-    const [donanteExpandido, setDonanteExpandido] = useState(null); // Controla la flechita
+    const [donante, setDonante] = useState(null); 
+    const [listaDonantes, setListaDonantes] = useState([]); 
+    const [donanteExpandido, setDonanteExpandido] = useState(null); 
     const [error, setError] = useState('');
 
     const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
@@ -47,7 +44,6 @@ function BuscarDonante({ usuarioLogeado }) {
 
         const donantes = await obtenerDonantes();
 
-        // 1. Si seleccionó un filtro de sangre
         if (filtroGrupo) {
             const filtrados = donantes.filter(d => d.grupoSanguineo === filtroGrupo);
             if (filtrados.length > 0) {
@@ -56,13 +52,15 @@ function BuscarDonante({ usuarioLogeado }) {
                 setError(`No hay donantes registrados con el grupo ${nombresGrupos[filtroGrupo] || filtroGrupo}.`);
             }
         } 
-        // 2. Si escribió una cédula
         else if (cedula) {
-            const donanteEncontrado = donantes.find(d => d.cedula === cedula);
+            // CORTAMOS ESPACIOS FANTASMAS DEL CELULAR AQUÍ TAMBIÉN
+            const terminoCedula = cedula.trim();
+            const donanteEncontrado = donantes.find(d => d.cedula === terminoCedula);
+            
             if (donanteEncontrado) {
                 const diasParaDonar = calcularDiasParaDonar(donanteEncontrado.fechaDonacion);
                 const todasLasMuestras = await obtenerMuestras();
-                const muestrasDonante = todasLasMuestras.filter(m => m.donanteCedula === cedula);
+                const muestrasDonante = todasLasMuestras.filter(m => m.donanteCedula === terminoCedula);
                 const muestraProcesada = muestrasDonante.find(m => m.estado === 'Procesada');
                 const grupoSanguineo = donanteEncontrado.grupoSanguineo || muestraProcesada?.grupoSanguineo;
 
@@ -117,8 +115,8 @@ function BuscarDonante({ usuarioLogeado }) {
         const tiposFormateados = datosMuestra.tipoDonacion.map(t => `${t} (${datosMuestra.volumenes[t]}cc)`).join(', ');
 
         const muestra = {
-            id: datosMuestra.codigoBolsa,
-            segmento: datosMuestra.segmentoBolsa,
+            id: datosMuestra.codigoBolsa.trim().toUpperCase(), // Blindado también aquí
+            segmento: datosMuestra.segmentoBolsa.trim().toUpperCase(),
             donanteCedula: donante.cedula,
             donanteNombre: donante.nombre,
             tipoDonacion: tiposFormateados,
@@ -197,25 +195,30 @@ function BuscarDonante({ usuarioLogeado }) {
             </div>
 
             <div className="max-w-4xl mx-auto px-4 -mt-20 relative z-0">
-                <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-100 mb-8">
-                    <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-6 border border-slate-100 mb-8">
+                    {/* AJUSTE RESPONSIVE: Los campos se apilan y la "O" queda centrada en móviles */}
+                    <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-center sm:items-end">
                         <div className="flex-grow w-full">
-                            <label className="block text-sm font-semibold text-slate-600 mb-2">Búsqueda Directa (C.I)</label>
+                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Búsqueda Directa (C.I)</label>
                             <input 
                                 type="text" 
                                 value={cedula} 
-                                onChange={(e) => { setCedula(e.target.value); setFiltroGrupo(''); }} 
+                                onChange={(e) => { setCedula(e.target.value.trim()); setFiltroGrupo(''); }} 
                                 placeholder="Ej. 1234567" 
-                                className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-blue text-lg" 
+                                className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-blue text-base sm:text-lg" 
                             />
                         </div>
-                        <div className="flex items-center pb-4 px-1 font-bold text-slate-300">O</div>
+                        
+                        <div className="flex items-center justify-center font-bold text-slate-300 py-1 sm:pb-4 sm:px-1 w-full sm:w-auto">
+                            O
+                        </div>
+                        
                         <div className="flex-grow w-full">
-                            <label className="block text-sm font-semibold text-slate-600 mb-2">Filtrar por Grupo</label>
+                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Filtrar por Grupo</label>
                             <select 
                                 value={filtroGrupo} 
                                 onChange={(e) => { setFiltroGrupo(e.target.value); setCedula(''); }} 
-                                className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-blue text-lg bg-white font-medium"
+                                className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-blue text-base sm:text-lg bg-white font-medium"
                             >
                                 <option value="">Seleccione grupo...</option>
                                 <option value="O+">O RH Positivo</option>
@@ -228,27 +231,25 @@ function BuscarDonante({ usuarioLogeado }) {
                                 <option value="AB-">AB RH Negativo</option>
                             </select>
                         </div>
-                        <button id="btn-buscar-principal" type="submit" className="w-full sm:w-auto bg-med-blue hover:bg-blue-800 text-white font-bold py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer h-[56px] whitespace-nowrap">
+                        <button id="btn-buscar-principal" type="submit" className="w-full sm:w-auto mt-2 sm:mt-0 bg-med-blue hover:bg-blue-800 text-white font-bold py-3 sm:py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer h-[50px] sm:h-[56px] whitespace-nowrap">
                             Buscar
                         </button>
                     </form>
 
                     {error && (
-                        <div className="mt-6 bg-slate-50 p-6 rounded-xl border border-slate-200 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
+                        <div className="mt-6 bg-slate-50 p-4 sm:p-6 rounded-xl border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left">
+                            <div className="flex flex-col sm:flex-row items-center gap-3">
                                 <span className="text-2xl">⚠️</span>
                                 <div><p className="font-bold">{error}</p></div>
                             </div>
-                            <button onClick={() => navigate('/registrar')} className="bg-med-blue text-white font-bold py-2.5 px-6 rounded-xl border-none cursor-pointer">
+                            <button onClick={() => navigate('/registrar')} className="w-full sm:w-auto bg-med-blue text-white font-bold py-2.5 px-6 rounded-xl border-none cursor-pointer">
                                 + Registrar Nuevo
                             </button>
                         </div>
                     )}
                 </div>
 
-                {/* ======================================================== */}
-                {/* RENDERIZADO 1: LISTA FILTRADA POR TIPO DE SANGRE         */}
-                {/* ======================================================== */}
+                {/* RENDERIZADO 1: LISTA FILTRADA POR TIPO DE SANGRE */}
                 {listaDonantes.length > 0 && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 mb-8">
                         <div className="flex justify-between items-end border-b border-slate-200 pb-2 mb-4">
@@ -276,16 +277,15 @@ function BuscarDonante({ usuarioLogeado }) {
                                     </div>
                                 </div>
 
-                                {/* SECCIÓN EXPANDIBLE (LA FLECHITA) */}
                                 {donanteExpandido === d.cedula && (
                                     <div className="bg-slate-50 p-4 sm:px-6 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-2">
-                                        <div>
+                                        <div className="text-center sm:text-left">
                                             <p className="text-sm text-slate-500 font-medium mb-0.5">Última Donación Registrada</p>
                                             <p className={`font-bold text-lg ${d.fechaDonacion ? 'text-slate-800' : 'text-amber-600'}`}>
                                                 {d.fechaDonacion ? `🗓️ ${d.fechaDonacion}` : '⚠️ Sin registro previo'}
                                             </p>
                                         </div>
-                                        <div>
+                                        <div className="w-full sm:w-auto">
                                             {!d.fechaDonacion ? (
                                                 <button 
                                                     onClick={() => {
@@ -316,38 +316,35 @@ function BuscarDonante({ usuarioLogeado }) {
                     </div>
                 )}
 
-                {/* ======================================================== */}
-                {/* RENDERIZADO 2: EXPEDIENTE COMPLETO (BÚSQUEDA INDIVIDUAL) */}
-                {/* ======================================================== */}
+                {/* RENDERIZADO 2: EXPEDIENTE COMPLETO */}
                 {donante && listaDonantes.length === 0 && (
                     <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-                        <div className="bg-slate-50 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
-                            <div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-5 sm:px-8 sm:py-5 flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
+                            <div className="text-center sm:text-left">
                                 <h3 className="font-bold text-2xl text-slate-800">{donante.nombre} {donante.apellido}</h3>
                                 <p className="text-slate-500 font-medium">C.I: {donante.cedula}</p>
                             </div>
-                            <div>
+                            <div className="text-center sm:text-right">
                                 <p className="text-xs text-slate-400 font-bold uppercase mb-1">Grupo Sanguíneo</p>
-                                <span className="bg-rose-100 text-med-accent px-4 py-1.5 rounded-lg text-lg font-black border border-rose-200">
+                                <span className="bg-rose-100 text-med-accent px-4 py-1.5 rounded-lg text-lg font-black border border-rose-200 inline-block">
                                     {nombresGrupos[donante.grupoSanguineo] || donante.grupoSanguineo || 'N/A'}
                                 </span>
                             </div>
                         </div>
 
-                        {/* ESTA ES LA CONDICIÓN QUE PROTEGE LOS BOTONES */}
                         {esAdmin && (
-                            <div className="px-8 py-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-4">
-                                <button onClick={abrirModalEditar} className="text-slate-600 hover:text-med-blue text-sm font-bold flex items-center gap-1 bg-transparent border-none cursor-pointer">
+                            <div className="px-4 sm:px-8 py-3 bg-slate-100 border-t border-slate-200 flex flex-col sm:flex-row justify-center sm:justify-end gap-2 sm:gap-4">
+                                <button onClick={abrirModalEditar} className="text-slate-600 hover:text-med-blue text-sm font-bold flex items-center justify-center gap-1 bg-transparent border-none cursor-pointer p-2">
                                     ✏️ Editar Datos
                                 </button>
-                                <button onClick={() => handleEliminar(donante.cedula)} className="text-red-600 hover:text-red-800 text-sm font-bold flex items-center gap-1 bg-transparent border-none cursor-pointer">
+                                <button onClick={() => handleEliminar(donante.cedula)} className="text-red-600 hover:text-red-800 text-sm font-bold flex items-center justify-center gap-1 bg-transparent border-none cursor-pointer p-2">
                                     🗑️ Eliminar Donante
                                 </button>
                             </div>
                         )}
 
-                        <div className="p-8 space-y-6">
-                            <div className="grid grid-cols-2 gap-6">
+                        <div className="p-5 sm:p-8 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-6">
                                     <h4 className="text-sm font-bold text-slate-400 uppercase border-b border-slate-100 pb-2">Información Clínica</h4>
                                     <div className="grid grid-cols-2 gap-4">
@@ -410,8 +407,8 @@ function BuscarDonante({ usuarioLogeado }) {
                                     <div className="space-y-3">
                                         {donante.historial.map((m, idx) => (
                                             <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                                                <div className="flex justify-between mb-2">
-                                                    <div className="flex gap-2">
+                                                <div className="flex flex-col sm:flex-row justify-between mb-2 gap-1 sm:gap-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         <span className="font-mono font-bold text-sm text-slate-800">S:{m.id} / Seg:{m.segmento || 'N/A'}</span>
                                                         <span className={`text-xs px-2 py-0.5 rounded-full ${m.estado === 'Procesada' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {m.estado || 'Pendiente'}
@@ -419,14 +416,14 @@ function BuscarDonante({ usuarioLogeado }) {
                                                     </div>
                                                     <span className="text-xs text-slate-500">{m.fechaRegistro}</span>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-2 text-xs">
-                                                    <div className="col-span-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                                                    <div className="sm:col-span-2">
                                                         <p className="text-slate-400">Fraccionamiento</p>
                                                         <p className="font-medium text-slate-700">{m.tipoDonacion}</p>
                                                     </div>
-                                                    <div className="col-span-4 mt-2">
+                                                    <div className="sm:col-span-4 mt-2">
                                                         <p className="text-slate-400 mb-1">Marcadores Serológicos</p>
-                                                        <div className="flex flex-wrap gap-3">
+                                                        <div className="flex flex-wrap gap-2 sm:gap-3">
                                                             {[
                                                                 { key: 'hiv', label: 'VIH' }, { key: 'htlv', label: 'HTLV' },
                                                                 { key: 'ch', label: 'CH' }, { key: 'av', label: 'AV' },
@@ -454,18 +451,19 @@ function BuscarDonante({ usuarioLogeado }) {
                 )}
             </div>
 
-            {/* MODAL EDICIÓN */}
+            {/* MODALES OMITIDOS EN ESTA VISTA (CÓDIGO INTACTO) ... */}
+            {/* Modal Editar */}
             {mostrarModalEditar && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
                         <h3 className="font-bold text-xl mb-4">Editar Datos del Donante</h3>
                         <form onSubmit={handleGuardarEdicion} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div><label className="block text-xs font-bold mb-1">Nombre</label><input type="text" name="nombre" value={donanteEdit.nombre} onChange={handleCambioEdit} className="w-full p-2 border rounded" required /></div>
                                 <div><label className="block text-xs font-bold mb-1">Apellido</label><input type="text" name="apellido" value={donanteEdit.apellido} onChange={handleCambioEdit} className="w-full p-2 border rounded" required /></div>
                                 <div><label className="block text-xs font-bold mb-1">Teléfono</label><input type="text" name="telefono" value={donanteEdit.telefono} onChange={handleCambioEdit} className="w-full p-2 border rounded" /></div>
-                                <div><label className="block text-xs font-bold mb-1">Cédula (Cuidado)</label><input type="text" name="cedula" value={donanteEdit.cedula} onChange={handleCambioEdit} className="w-full p-2 border rounded bg-slate-100" readOnly title="La cédula no se puede editar para evitar pérdida de historial." /></div>
-                                <div className="col-span-2"><label className="block text-xs font-bold mb-1">Enfermedades / Notas</label><textarea name="enfermedades" value={donanteEdit.enfermedades} onChange={handleCambioEdit} className="w-full p-2 border rounded"></textarea></div>
+                                <div><label className="block text-xs font-bold mb-1">Cédula (Cuidado)</label><input type="text" name="cedula" value={donanteEdit.cedula} onChange={handleCambioEdit} className="w-full p-2 border rounded bg-slate-100" readOnly /></div>
+                                <div className="sm:col-span-2"><label className="block text-xs font-bold mb-1">Enfermedades / Notas</label><textarea name="enfermedades" value={donanteEdit.enfermedades} onChange={handleCambioEdit} className="w-full p-2 border rounded"></textarea></div>
                             </div>
                             <div className="flex justify-end gap-2 mt-4">
                                 <button type="button" onClick={() => setMostrarModalEditar(false)} className="px-4 py-2 border rounded text-slate-600 bg-white cursor-pointer">Cancelar</button>
@@ -476,20 +474,20 @@ function BuscarDonante({ usuarioLogeado }) {
                 </div>
             )}
 
-            {/* MODAL EXTRACCIÓN */}
+            {/* Modal Muestra */}
             {mostrarModalMuestra && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 sm:p-6 overflow-y-auto max-h-[95vh]">
                         <h3 className="font-bold text-xl mb-4">Registro de Muestra</h3>
                         <form onSubmit={handleGuardarMuestra} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold mb-1">Serial Bolsa *</label>
-                                    <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, codigoBolsa: e.target.value})} required className="w-full p-3 border rounded-xl uppercase font-mono bg-blue-50" placeholder="BOL-X99"/>
+                                    <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, codigoBolsa: e.target.value.toUpperCase()})} required className="w-full p-3 border rounded-xl uppercase font-mono bg-blue-50" placeholder="BOL-X99"/>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold mb-1">Segmento *</label>
-                                    <input type="text" name="segmentoBolsa" value={datosMuestra.segmentoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, segmentoBolsa: e.target.value})} required className="w-full p-3 border rounded-xl uppercase" placeholder="Ej. 1A"/>
+                                    <input type="text" name="segmentoBolsa" value={datosMuestra.segmentoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, segmentoBolsa: e.target.value.toUpperCase()})} required className="w-full p-3 border rounded-xl uppercase" placeholder="Ej. 1A"/>
                                 </div>
                             </div>
 
@@ -497,8 +495,8 @@ function BuscarDonante({ usuarioLogeado }) {
                                 <label className="block text-sm font-bold mb-3">Fraccionamiento y Volumen (cc/ml) *</label>
                                 <div className="flex flex-col gap-3">
                                     {['Sangre Total', 'Concentrado Globular', 'Plasma Fresco Congelado', 'Concentrado Plaquetario'].map(f => (
-                                        <div key={f} className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-slate-200">
-                                            <label className="flex items-center gap-3 cursor-pointer flex-grow">
+                                        <div key={f} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 bg-white p-2.5 rounded-lg border border-slate-200">
+                                            <label className="flex items-center gap-3 cursor-pointer">
                                                 <input type="checkbox" value={f} checked={datosMuestra.tipoDonacion.includes(f)} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
                                                 <span className="font-medium text-sm text-slate-700">{f}</span>
                                             </label>
@@ -509,7 +507,7 @@ function BuscarDonante({ usuarioLogeado }) {
                                                     placeholder="cc/ml" 
                                                     value={datosMuestra.volumenes[f] || ''} 
                                                     onChange={(e) => handleVolumenCambio(f, e.target.value)} 
-                                                    className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue text-sm font-bold text-center" 
+                                                    className="w-full sm:w-24 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue text-sm font-bold text-center" 
                                                     required 
                                                 />
                                             )}
@@ -523,9 +521,9 @@ function BuscarDonante({ usuarioLogeado }) {
                                 <textarea name="observaciones" value={datosMuestra.observaciones} onChange={(e) => setDatosMuestra({...datosMuestra, observaciones: e.target.value})} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue resize-none"></textarea>
                             </div>
 
-                            <div className="flex justify-end gap-2 mt-4">
-                                <button type="button" onClick={() => setMostrarModalMuestra(false)} className="px-4 py-2 rounded-xl text-slate-600 cursor-pointer border-none bg-transparent">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer border-none">A Cuarentena</button>
+                            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-4">
+                                <button type="button" onClick={() => setMostrarModalMuestra(false)} className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded-xl text-slate-600 cursor-pointer border-none bg-transparent">Cancelar</button>
+                                <button type="submit" className="w-full sm:w-auto px-4 py-3 sm:py-2 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer border-none">A Cuarentena</button>
                             </div>
                         </form>
                     </div>
