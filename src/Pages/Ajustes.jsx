@@ -31,6 +31,14 @@ function Ajustes() {
         grupos: {}, serologiasPositivas: { vih: 0, sifilis: 0, chagas: 0 }, inventarioTotal: 0
     });
 
+    // DICCIONARIO PARA MOSTRAR NOMBRES LARGOS DE SANGRE
+    const nombresGrupos = {
+        'O+': 'O RH Positivo', 'O-': 'O RH Negativo',
+        'A+': 'A RH Positivo', 'A-': 'A RH Negativo',
+        'B+': 'B RH Positivo', 'B-': 'B RH Negativo',
+        'AB+': 'AB RH Positivo', 'AB-': 'AB RH Negativo'
+    };
+
     useEffect(() => {
         const cargarDatos = async () => {
             const donors = await obtenerDonantes();
@@ -71,7 +79,6 @@ function Ajustes() {
         setTipoLimpiar('');
     };
 
-    // FUNCIÓN AUXILIAR PARA CÁLCULOS
     const calcularMetricasReporte = async () => {
         const todosDonantes = await obtenerDonantes();
         const todasMuestras = await obtenerMuestras();
@@ -113,7 +120,6 @@ function Ajustes() {
         };
     };
 
-    // EXPORTACIÓN A EXCEL (CSV)
     const handleExportarExcel = async () => {
         const metricas = await calcularMetricasReporte();
         const hoy = new Date();
@@ -142,7 +148,6 @@ function Ajustes() {
         URL.revokeObjectURL(url);
     };
 
-    // ENVÍO DE CORREO
     const handleEnviarCorreo = async () => {
         if (!correoDestino) {
             alert("Por favor, ingrese un correo de destino.");
@@ -211,9 +216,10 @@ Usuario responsable: ${authUser.nombre || 'Administrador'}
                             <p className="text-slate-500 text-sm">No hay datos de grupos sanguíneos.</p>
                         ) : (
                             <div className="space-y-3">
+                                {/* AQUÍ SE APLICA EL DICCIONARIO nombresGrupos */}
                                 {Object.entries(stats.grupos).sort((a, b) => b[1] - a[1]).map(([grupo, count]) => (
                                     <div key={grupo} className="flex items-center gap-3">
-                                        <span className="w-32 font-bold text-med-accent text-xs">{grupo}</span>
+                                        <span className="w-32 font-bold text-med-accent text-xs">{nombresGrupos[grupo] || grupo}</span>
                                         <div className="flex-grow h-6 bg-slate-100 rounded-full overflow-hidden">
                                             <div className="h-full bg-med-accent rounded-full" style={{ width: `${(count / stats.totalDonors) * 100}%` }}></div>
                                         </div>
