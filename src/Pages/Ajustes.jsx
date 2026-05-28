@@ -14,16 +14,23 @@ function TarjetaEstadistica({ titulo, valor, color }) {
 
 function Ajustes() {
     const navigate = useNavigate();
+    
+    // VERIFICACIÓN DE SEGURIDAD PARA EL CANDADO
+    const authUser = JSON.parse(localStorage.getItem('lims_auth_user')) || {};
+    const esAdmin = authUser.rol === 'admin';
+
     const [mostrarModalLimpiar, setMostrarModalLimpiar] = useState(false);
     const [tipoLimpiar, setTipoLimpiar] = useState('');
+    
+    // Estados para los reportes
+    const [tiempoReporte, setTiempoReporte] = useState('historico');
+    const [correoDestino, setCorreoDestino] = useState('coordinacion.salud@gob.ve');
 
-    // --- CORREGIDO: Nuevo estado para manejar estadísticas en la nube ---
     const [stats, setStats] = useState({
         totalDonors: 0, totalMuestras: 0, procesadas: 0, pendientes: 0,
         grupos: {}, serologiasPositivas: { vih: 0, sifilis: 0, chagas: 0 }, inventarioTotal: 0
     });
 
-    // --- CORREGIDO: UseEffect para recopilar datos de Supabase ---
     useEffect(() => {
         const cargarDatos = async () => {
             const donors = await obtenerDonantes();
@@ -42,7 +49,7 @@ function Ajustes() {
             const serologiasPositivas = {
                 vih: procesadas.filter(m => m.vih === 'Positivo').length,
                 sifilis: procesadas.filter(m => m.sifilis === 'Positivo').length,
-                chagas: procesadas.filter(m => m.chagas === 'Positivo').length
+                chagas: procesadas.filter(m => m.ch === 'Positivo').length 
             };
 
             setStats({
@@ -58,37 +65,120 @@ function Ajustes() {
         cargarDatos();
     }, []);
 
-    // --- CORREGIDO: Candado de seguridad para la presentación ---
     const handleLimpiarDatos = () => {
-        alert('ℹ️ Por seguridad y para preservar la integridad de los datos en la presentación de grado, el borrado masivo ha sido desactivado en la versión de la nube.');
+        alert('ℹ️ Por seguridad y para preservar la integridad de los datos en la presentación de grado, el borrado masivo ha sido desactivado.');
         setMostrarModalLimpiar(false);
         setTipoLimpiar('');
     };
 
-    // --- CORREGIDO: Async para descargar los datos de la nube ---
-    const handleExportar = async () => {
-        const donors = await obtenerDonantes();
-        const muestras = await obtenerMuestras();
-        const datos = {
-            donors,
-            muestras,
-            exportadoEn: new Date().toISOString()
-        };
+    // FUNCIÓN AUXILIAR PARA CÁLCULOS
+    const calcularMetricasReporte = async () => {
+        const todosDonantes = await obtenerDonantes();
+        const todasMuestras = await obtenerMuestras();
+        const hoy = new Date();
+        
+        let muestrasFiltradas = todasMuestras;
+        let donorsFiltrados = todosDonantes;
 
-        const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+        if (tiempoReporte === 'semana') {
+            const hace7Dias = new Date(hoy);
+            hace7Dias.setDate(hoy.getDate() - 7);
+            muestrasFiltradas = todasMuestras.filter(m => new Date(m.fechaRegistro) >= hace7Dias);
+            donorsFiltrados = todosDonantes.filter(d => d.fechaDonacion && new Date(d.fechaDonacion) >= hace7Dias);
+        } else if (tiempoReporte === 'mes') {
+            const mesActual = hoy.toISOString().slice(0, 7); 
+            muestrasFiltradas = todasMuestras.filter(m => m.fechaRegistro && m.fechaRegistro.startsWith(mesActual));
+            donorsFiltrados = todosDonantes.filter(d => d.fechaDonacion && d.fechaDonacion.startsWith(mesActual));
+        }
+
+        const extraccionesTotales = muestrasFiltradas.length;
+        const extraccionesProcesadas = muestrasFiltradas.filter(m => m.estado === 'Procesada').length;
+        const extraccionesPendientes = extraccionesTotales - extraccionesProcesadas;
+
+        const donantesTotales = donorsFiltrados.length;
+        let donantesNoAptos = 0;
+
+        donorsFiltrados.forEach(d => {
+            const susMuestras = todasMuestras.filter(m => m.donanteCedula === d.cedula);
+            const esNoApto = susMuestras.some(m => 
+                m.hiv === 'Positivo' || m.sifilis === 'Positivo' || m.ch === 'Positivo' ||
+                m.htlv === 'Positivo' || m.av === 'Positivo' || m.coreb === 'Positivo' || m.hcv === 'Positivo'
+            );
+            if (esNoApto) donantesNoAptos++;
+        });
+
+        return {
+            donantesTotales, donantesAptos: donantesTotales - donantesNoAptos, donantesNoAptos,
+            extraccionesTotales, extraccionesProcesadas, extraccionesPendientes
+        };
+    };
+
+    // EXPORTACIÓN A EXCEL (CSV)
+    const handleExportarExcel = async () => {
+        const metricas = await calcularMetricasReporte();
+        const hoy = new Date();
+        const separador = ",";
+
+        const csvContenido = [
+            ["REPORTE GENERAL - SISTEMA HEMOTRANSF"],
+            ["Periodo:", tiempoReporte.toUpperCase()],
+            ["Fecha de Emision:", hoy.toLocaleDateString()],
+            [],
+            ["METRICA", "CANTIDAD"],
+            ["Donantes Totales Registrados", metricas.donantesTotales],
+            ["Donantes Clasificados como Aptos", metricas.donantesAptos],
+            ["Donantes Clasificados como No Aptos", metricas.donantesNoAptos],
+            ["Extracciones Totales en el Periodo", metricas.extraccionesTotales],
+            ["Extracciones Procesadas", metricas.extraccionesProcesadas],
+            ["Extracciones Pendientes", metricas.extraccionesPendientes]
+        ].map(fila => fila.join(separador)).join("\n");
+
+        const blob = new Blob(["\uFEFF" + csvContenido], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `lims-backup-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Reporte_Hemotransf_${tiempoReporte}_${hoy.toISOString().split('T')[0]}.csv`;
+        link.click();
         URL.revokeObjectURL(url);
+    };
+
+    // ENVÍO DE CORREO
+    const handleEnviarCorreo = async () => {
+        if (!correoDestino) {
+            alert("Por favor, ingrese un correo de destino.");
+            return;
+        }
+
+        const metricas = await calcularMetricasReporte();
+        
+        const cuerpoCorreo = `Saludos cordiales,
+
+Por medio de la presente se remite el reporte estadístico del Banco de Sangre correspondiente al periodo: ${tiempoReporte.toUpperCase()}.
+
+📊 MÉTRICAS DE DONANTES
+• Donantes Totales: ${metricas.donantesTotales}
+• Donantes Aptos: ${metricas.donantesAptos}
+• Donantes No Aptos: ${metricas.donantesNoAptos}
+
+🩸 MÉTRICAS DE EXTRACCIONES
+• Extracciones Totales: ${metricas.extraccionesTotales}
+• Extracciones Procesadas: ${metricas.extraccionesProcesadas}
+• Extracciones Pendientes: ${metricas.extraccionesPendientes}
+
+Generado automáticamente por el Sistema Hemotransf.
+Fecha de emisión: ${new Date().toLocaleDateString()}
+Usuario responsable: ${authUser.nombre || 'Administrador'}
+`;
+
+        const enlaceMailto = `mailto:${correoDestino}?subject=Reporte Gerencial Hemotransf - ${new Date().toLocaleDateString()}&body=${encodeURIComponent(cuerpoCorreo)}`;
+        window.open(enlaceMailto, '_blank');
     };
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-8">
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="text-xl sm:text-2xl">⚙️</span>
+                    <span className="text-xl sm:text-2xl">📊</span>
                     <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
@@ -99,8 +189,8 @@ function Ajustes() {
             <div className="relative overflow-hidden bg-gradient-to-r from-slate-600 to-slate-800 h-40 sm:h-48 pt-6 sm:pt-8 px-4 sm:px-6">
                 <div className="absolute inset-0 bg-panal-ligero bg-repeat opacity-100 pointer-events-none"></div>
                 <div className="relative z-10 max-w-5xl mx-auto">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Ajustes del Sistema</h1>
-                    <p className="text-slate-200 text-sm sm:text-lg">Estadísticas, configuración y gestión de datos.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Resumen General</h1>
+                    <p className="text-slate-200 text-sm sm:text-lg">Estadísticas, configuración y reportes gerenciales.</p>
                 </div>
             </div>
 
@@ -123,7 +213,7 @@ function Ajustes() {
                             <div className="space-y-3">
                                 {Object.entries(stats.grupos).sort((a, b) => b[1] - a[1]).map(([grupo, count]) => (
                                     <div key={grupo} className="flex items-center gap-3">
-                                        <span className="w-12 font-bold text-med-accent">{grupo}</span>
+                                        <span className="w-32 font-bold text-med-accent text-xs">{grupo}</span>
                                         <div className="flex-grow h-6 bg-slate-100 rounded-full overflow-hidden">
                                             <div className="h-full bg-med-accent rounded-full" style={{ width: `${(count / stats.totalDonors) * 100}%` }}></div>
                                         </div>
@@ -156,24 +246,59 @@ function Ajustes() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6">
+                    {/* BLOQUE IZQUIERDO: REPORTE EXCEL (Visible para todos) */}
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6 flex flex-col">
                         <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                            💾 Respaldo de Datos
+                            📑 Reporte Local (Excel)
                         </h3>
-                        <p className="text-sm text-slate-500 mb-4">Exporte todos los datos del sistema en formato JSON para respaldo o transferencia.</p>
-                        <button onClick={handleExportar} className="w-full px-4 py-3 bg-med-blue hover:bg-blue-800 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
-                            📥 Exportar Datos (Nube)
+                        <p className="text-sm text-slate-500 mb-4">Descargue el resumen estadístico a su computadora según el periodo seleccionado.</p>
+                        
+                        <div className="flex gap-3 mb-4 mt-auto">
+                            <select 
+                                value={tiempoReporte} 
+                                onChange={(e) => setTiempoReporte(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white font-medium"
+                            >
+                                <option value="historico">Histórico Completo</option>
+                                <option value="mes">Este Mes</option>
+                                <option value="semana">Últimos 7 días</option>
+                            </select>
+                        </div>
+
+                        <button onClick={handleExportarExcel} className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
+                            📥 Descargar Excel (.csv)
                         </button>
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6">
+                    {/* BLOQUE DERECHO: NOTIFICAR CORREO (Con validación de candado) */}
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6 flex flex-col">
                         <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                            🗑️ Limpiar Datos
+                            📧 Notificar al Ente Superior
                         </h3>
-                        <p className="text-sm text-slate-500 mb-4">Elimine datos del sistema. Esta acción no se puede deshacer.</p>
-                        <button onClick={() => setMostrarModalLimpiar(true)} className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
-                            🗑️ Limpiar Datos
-                        </button>
+                        
+                        {esAdmin ? (
+                            <>
+                                <p className="text-sm text-slate-500 mb-4">Envíe el resumen estadístico por correo. Utiliza el mismo periodo seleccionado a la izquierda.</p>
+                                <div className="mb-4 mt-auto">
+                                    <input 
+                                        type="email" 
+                                        value={correoDestino} 
+                                        onChange={(e) => setCorreoDestino(e.target.value)}
+                                        placeholder="ejemplo@ministerio.gob.ve"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                                    />
+                                </div>
+                                <button onClick={handleEnviarCorreo} className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
+                                    ✉️ Redactar y Enviar Correo
+                                </button>
+                            </>
+                        ) : (
+                            <div className="flex-grow flex flex-col items-center justify-center bg-slate-50 border border-slate-100 rounded-xl p-6 text-center mt-2">
+                                <span className="text-4xl mb-3 opacity-80">🔒</span>
+                                <p className="font-bold text-slate-700">Acceso Restringido</p>
+                                <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Solo los administradores tienen permiso para enviar notificaciones externas.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -184,7 +309,7 @@ function Ajustes() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                             <p className="text-slate-500">Sistema de Gestión</p>
-                            <p className="font-medium">RegistroSanguíneo Pro</p>
+                            <p className="font-medium">Sistema Hemotransf Pro</p>
                         </div>
                         <div>
                             <p className="text-slate-500">Versión</p>
@@ -202,6 +327,7 @@ function Ajustes() {
                 </div>
             </div>
 
+            {/* MODAL LIMPIAR DATOS OCULTO/MANTENIDO POR ESTRUCTURA */}
             {mostrarModalLimpiar && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">

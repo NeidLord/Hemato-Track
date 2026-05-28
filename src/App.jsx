@@ -21,7 +21,6 @@ function Inicio({ usuarioLogeado, onLogout }) {
       <div className="relative overflow-hidden bg-gradient-to-br from-med-blue to-blue-900 pb-28 sm:pb-36 pt-6 sm:pt-8 px-4 sm:px-6">
 
         {/* --- CAPA DEL PANAL DE FONDO --- */}
-        {/* Este div ocupa todo el espacio (inset-0) y tiene el patrón repetido */}
         <div className="absolute inset-0 bg-panal-ligero bg-repeat opacity-100 pointer-events-none"></div>
 
         <div className="relative z-10 max-w-5xl mx-auto">
@@ -127,13 +126,7 @@ function Inicio({ usuarioLogeado, onLogout }) {
         </div>
       </div>
 
-      <footer className="bg-slate-800 text-slate-400 py-4 mt-auto">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <a href="https://github.com/SAGS2002" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-white transition-colors">
-            Desarrollado por <span className="font-bold text-white">Sebastian Gallardo</span>
-          </a>
-        </div>
-      </footer>
+      
 
     </div>
   );
@@ -145,18 +138,15 @@ function RutaProtegida({ usuario, children }) {
 }
 
 function App() {
-  // Ahora guardamos el objeto del usuario completo, no solo "true"
   const [usuarioLogeado, setUsuarioLogeado] = useState(() => {
     try {
       const data = localStorage.getItem('lims_auth_user');
-      // Si por error se guardó el texto "undefined", lo descartamos
       if (data === "undefined") {
         localStorage.removeItem('lims_auth_user');
         return null;
       }
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      // Si la memoria tiene datos corruptos, la limpiamos y pedimos login de nuevo
       localStorage.removeItem('lims_auth_user');
       return null;
     }
@@ -175,9 +165,10 @@ function App() {
     <Routes>
       <Route path="/login" element={usuarioLogeado ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />} />
 
-      {/* LA RUTA RAIZ DECIDE: Si es admin muestra PanelAdmin, si es usuario muestra el LIMS operativo */}
+      {/* AQUÍ ESTÁ LA MAGIA CORREGIDA */}
+      {/* LA RUTA RAIZ DECIDE: Si las iniciales son ADMIN, muestra Panel Maestro. Para todos los demás (incluyendo admins normales), muestra el Inicio */}
       <Route path="/" element={<RutaProtegida usuario={usuarioLogeado}>
-        {usuarioLogeado?.rol === 'admin'
+        {usuarioLogeado?.iniciales === 'ADMIN'
           ? <PanelAdmin usuarioAdmin={usuarioLogeado} onLogout={handleLogout} />
           : <Inicio usuarioLogeado={usuarioLogeado} onLogout={handleLogout} />
         }

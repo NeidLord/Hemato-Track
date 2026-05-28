@@ -1,36 +1,32 @@
 // src/Pages/RegistrarDonante.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { guardarDonante, guardarMuestra, actualizarDonante } from '../utils/data';
+import { guardarDonante, guardarMuestra, actualizarDonante, verificarDuplicados } from '../utils/data';
 
 function RegistrarDonante() {
     const navigate = useNavigate();
 
-    // Estado del formulario del donante
     const [formData, setFormData] = useState({
         cedula: '', nombre: '', apellido: '', correo: '', direccion: '', fechaNacimiento: '', edad: '', sexo: '',
+        embarazos: 'No', 
         telefonoPrefijo: '0412', telefonoCuerpo: '', enfermedades: ''
     });
 
-    // Estados para el Modal de Extracción Automático
+    const [errores, setErrores] = useState({}); // Estado para errores en tiempo real
+
     const [mostrarModalMuestra, setMostrarModalMuestra] = useState(false);
     const [datosMuestra, setDatosMuestra] = useState({
-        codigoBolsa: '',
-        tipoDonacion: ['Sangre Total'], // Arreglo para soportar múltiples opciones
-        volumen: '450',
-        observaciones: ''
+        codigoBolsa: '', segmentoBolsa: '', tipoDonacion: ['Sangre Total'], 
+        volumenes: { 'Sangre Total': '450' }, observaciones: ''
     });
 
-    // --- LÓGICA DEL DONANTE ---
     const calcularEdad = (fechaNac) => {
         if (!fechaNac) return '';
         const fecha = new Date(fechaNac);
         const hoy = new Date();
         let edad = hoy.getFullYear() - fecha.getFullYear();
         const mes = hoy.getMonth() - fecha.getMonth();
-        if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) {
-            edad--;
-        }
+        if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) edad--;
         return edad > 0 ? edad : 0;
     };
 
@@ -43,15 +39,38 @@ function RegistrarDonante() {
         }
     };
 
-    // Guardar el donante
+    // VALIDACIÓN EN TIEMPO REAL AL SALIR DEL CAMPO (ONBLUR)
+    const handleBlurValidacion = async (campo, valor) => {
+        if (!valor) return;
+        const validacion = await verificarDuplicados(
+            campo === 'cedula' ? valor : null, 
+            campo === 'correo' ? valor : null
+        );
+        
+        if (validacion.existe) {
+            setErrores(prev => ({ ...prev, [campo]: validacion.mensaje }));
+        } else {
+            setErrores(prev => {
+                const nuevos = { ...prev };
+                delete nuevos[campo];
+                return nuevos;
+            });
+        }
+    };
+
     const handleSubmitDonante = async (e) => {
         e.preventDefault();
+        
+        // Bloqueo si hay errores detectados en tiempo real
+        if (Object.keys(errores).length > 0) {
+            alert('⚠️ Corrija los errores marcados en rojo antes de continuar.');
+            return;
+        }
+
         const telefonoCompleto = `${formData.telefonoPrefijo}-${formData.telefonoCuerpo}`;
         const donante = { ...formData, telefono: telefonoCompleto };
 
-        // Agregamos await
         const resultado = await guardarDonante(donante);
-
         if (resultado.exito) {
             setMostrarModalMuestra(true);
         } else {
@@ -59,7 +78,6 @@ function RegistrarDonante() {
         }
     };
 
-    // Guardar la bolsa
     const handleGuardarMuestra = async (e) => {
         e.preventDefault();
 
@@ -68,45 +86,70 @@ function RegistrarDonante() {
             return;
         }
 
+        for (let tipo of datosMuestra.tipoDonacion) {
+            if (!datosMuestra.volumenes[tipo] || datosMuestra.volumenes[tipo] <= 0) {
+                alert(`⚠️ Ingrese un volumen válido para: ${tipo}`);
+                return;
+            }
+        }
+
+        const tiposFormateados = datosMuestra.tipoDonacion.map(t => `${t} (${datosMuestra.volumenes[t]}cc)`).join(', ');
         const usuarioLogeado = JSON.parse(localStorage.getItem('lims_auth_user'));
+        
         const muestra = {
             id: datosMuestra.codigoBolsa,
+            segmento: datosMuestra.segmentoBolsa, // Aseguramos enviar el segmento
             donanteCedula: formData.cedula,
             donanteNombre: `${formData.nombre} ${formData.apellido}`,
-            ...datosMuestra,
-            tipoDonacion: datosMuestra.tipoDonacion.join(', '),
+            tipoDonacion: tiposFormateados,
+            volumen: parseInt(datosMuestra.volumenes['Sangre Total']) || 0,
+            volumen_st: parseInt(datosMuestra.volumenes['Concentrado Globular']) || 0,
+            volumen_pfc: parseInt(datosMuestra.volumenes['Plasma Fresco Congelado']) || 0,
+            volumen_cp: parseInt(datosMuestra.volumenes['Concentrado Plaquetario']) || 0,
+            observaciones: datosMuestra.observaciones,
             fechaRegistro: new Date().toISOString().split('T')[0],
             estado: 'Pendiente',
             bancoOrigen: usuarioLogeado?.banco || 'Desconocido',
             hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin'
         };
 
-        // Agregamos los await
-        await guardarMuestra(muestra);
-        await actualizarDonante(formData.cedula, { fechaDonacion: muestra.fechaRegistro });
-
-        alert(`Registro exitoso. La bolsa ${datosMuestra.codigoBolsa} ha entrado en cuarentena para análisis serológico.`);
-        navigate('/buscar');
+        const resultado = await guardarMuestra(muestra);
+        if (resultado.exito) {
+            await actualizarDonante(formData.cedula, { fechaDonacion: muestra.fechaRegistro });
+            alert(`Registro exitoso. La bolsa ${datosMuestra.codigoBolsa} (Seg: ${datosMuestra.segmentoBolsa}) entró en cuarentena.`);
+            navigate('/buscar');
+        } else {
+            alert(resultado.mensaje);
+        }
     };
 
-    // --- LÓGICA DEL MODAL DE EXTRACCIÓN ---
     const handleCheckboxCambio = (e) => {
         const { value, checked } = e.target;
         setDatosMuestra(prev => {
             let nuevosTipos = [...prev.tipoDonacion];
+            let nuevosVolumenes = { ...prev.volumenes };
             if (checked) {
                 nuevosTipos.push(value);
+                if (!nuevosVolumenes[value]) nuevosVolumenes[value] = value === 'Sangre Total' ? '450' : '';
             } else {
                 nuevosTipos = nuevosTipos.filter(t => t !== value);
+                delete nuevosVolumenes[value];
             }
-            return { ...prev, tipoDonacion: nuevosTipos };
+            return { ...prev, tipoDonacion: nuevosTipos, volumenes: nuevosVolumenes };
         });
+    };
+
+    const handleVolumenCambio = (tipo, valor) => {
+        setDatosMuestra(prev => ({ ...prev, volumenes: { ...prev.volumenes, [tipo]: valor } }));
     };
 
     const handleCambioMuestra = (e) => {
         const { name, value } = e.target;
-        setDatosMuestra({ ...datosMuestra, [name]: value });
+        setDatosMuestra(prev => ({ ...prev, [name]: value }));
     };
+
+    // Estilo dinámico para el botón de guardado (si hay error se ve bloqueado)
+    const botonBloqueado = Object.keys(errores).length > 0;
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12 relative">
@@ -128,31 +171,30 @@ function RegistrarDonante() {
 
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-8">
                     <form onSubmit={handleSubmitDonante} className="space-y-5 sm:space-y-6">
-
-                        {/* --- DATOS DEMOGRÁFICOS --- */}
                         <h3 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2 mb-3 sm:mb-4">Información Personal</h3>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div className="md:col-span-2">
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Cédula de Identidad *</label>
-                                <input type="text" name="cedula" value={formData.cedula} onChange={handleChange} required placeholder="Ej. 12345678" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
+                                <input 
+                                    type="text" name="cedula" value={formData.cedula} onChange={handleChange} 
+                                    onBlur={(e) => handleBlurValidacion('cedula', e.target.value)}
+                                    required placeholder="Ej. 12345678" 
+                                    className={`w-full px-4 py-3 rounded-xl border ${errores.cedula ? 'border-red-500 bg-red-50' : 'border-slate-300'} focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base`} 
+                                />
+                                {errores.cedula && <p className="text-red-600 text-xs font-bold mt-1.5">{errores.cedula}</p>}
                             </div>
-
                             <div>
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Nombres *</label>
                                 <input type="text" name="nombre" value={formData.nombre} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
                             </div>
-
                             <div>
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Apellidos *</label>
                                 <input type="text" name="apellido" value={formData.apellido} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
                             </div>
-
                             <div>
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Fecha de Nacimiento *</label>
                                 <input type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
                             </div>
-
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Edad (Auto)</label>
@@ -167,6 +209,23 @@ function RegistrarDonante() {
                                     </select>
                                 </div>
                             </div>
+                            
+                            {formData.sexo === 'Femenino' && (
+                                <div className="md:col-span-2 bg-rose-50 p-4 rounded-xl border border-rose-200">
+                                    <label className="block text-sm font-bold text-rose-800 mb-2">¿Antecedentes de embarazo? *</label>
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="embarazos" value="No" checked={formData.embarazos === 'No'} onChange={handleChange} className="w-4 h-4 text-med-accent" />
+                                            <span>No / Nulípara</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="embarazos" value="Sí" checked={formData.embarazos === 'Sí'} onChange={handleChange} className="w-4 h-4 text-med-accent" />
+                                            <span className="font-semibold text-red-700">Sí (Multípara)</span>
+                                        </label>
+                                    </div>
+                                    {formData.embarazos === 'Sí' && <p className="text-xs text-red-600 mt-2">Alerta clínica: Posible restricción para uso de plasma (Riesgo TRALI).</p>}
+                                </div>
+                            )}
 
                             <div className="md:col-span-2">
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Dirección de Habitación</label>
@@ -200,7 +259,13 @@ function RegistrarDonante() {
                             </div>
                             <div className="md:col-span-2">
                                 <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Correo Electrónico</label>
-                                <input type="email" name="correo" value={formData.correo} onChange={handleChange} placeholder="nombre@ejemplo.com" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
+                                <input 
+                                    type="email" name="correo" value={formData.correo} onChange={handleChange} 
+                                    onBlur={(e) => handleBlurValidacion('correo', e.target.value)}
+                                    placeholder="nombre@ejemplo.com" 
+                                    className={`w-full px-4 py-3 rounded-xl border ${errores.correo ? 'border-red-500 bg-red-50' : 'border-slate-300'} focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base`} 
+                                />
+                                {errores.correo && <p className="text-red-600 text-xs font-bold mt-1.5">{errores.correo}</p>}
                             </div>
                         </div>
 
@@ -208,7 +273,11 @@ function RegistrarDonante() {
                             <button type="button" onClick={() => navigate('/buscar')} className="w-full sm:w-auto px-6 py-3 rounded-xl font-semibold text-slate-500 hover:bg-slate-100 bg-transparent border-none cursor-pointer text-sm sm:text-base">
                                 Cancelar
                             </button>
-                            <button type="submit" className="w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white bg-med-blue hover:bg-blue-800 transition-all shadow-md active:scale-95 border-none cursor-pointer text-sm sm:text-base">
+                            <button 
+                                type="submit" 
+                                disabled={botonBloqueado}
+                                className={`w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md border-none ${botonBloqueado ? 'bg-slate-400 cursor-not-allowed' : 'bg-med-blue hover:bg-blue-800 active:scale-95 cursor-pointer'} text-sm sm:text-base`}
+                            >
                                 Guardar y Registrar Extracción ➔
                             </button>
                         </div>
@@ -216,16 +285,15 @@ function RegistrarDonante() {
                 </div>
             </div>
 
-            {/* --- MODAL DE EXTRACCIÓN (Aparece tras guardar el donante) --- */}
+            {/* --- MODAL DE EXTRACCIÓN --- */}
             {mostrarModalMuestra && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="bg-med-blue px-4 sm:px-6 py-4 flex justify-between items-center">
                             <h3 className="text-white font-bold text-base sm:text-lg flex items-center gap-2">
-                                <span>💉</span> Extracción de Sangre
+                                <span>💉</span> Registro de Muestra
                             </h3>
-                            {/* Si cancela aquí, el donante ya se guardó, lo mandamos al buscador */}
-                            <button onClick={() => navigate('/buscar')} className="text-blue-200 hover:text-white transition-colors text-2xl font-bold bg-transparent border-none cursor-pointer p-1">
+                            <button onClick={() => setMostrarModalMuestra(false)} className="text-blue-200 hover:text-white transition-colors text-2xl font-bold bg-transparent border-none cursor-pointer p-1">
                                 ×
                             </button>
                         </div>
@@ -233,53 +301,56 @@ function RegistrarDonante() {
                         <div className="p-4 sm:p-6 overflow-y-auto">
                             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-5 flex gap-2 items-center">
                                 <span className="text-emerald-600 text-lg">✅</span>
-                                <p className="text-sm text-emerald-800">Donante <strong>{formData.nombre}</strong> guardado con éxito.</p>
+                                <p className="text-sm text-emerald-800">Donante <strong>{formData.nombre}</strong> guardado.</p>
                             </div>
 
-                            <form id="form-muestra" onSubmit={handleGuardarMuestra} className="space-y-5">
-                                <div>
-                                    <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">ID Único de Bolsa (Escanear) *</label>
-                                    <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. BOL-2026-X99" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all bg-blue-50 font-mono text-base sm:text-lg uppercase" />
-                                </div>
-
+                            <form id="form-muestra" onSubmit={handleGuardarMuestra} className="space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="sm:col-span-2 border border-slate-200 p-4 rounded-xl bg-slate-50">
-                                        <label className="block text-sm font-bold text-slate-700 mb-3">Componentes Extraídos (Múltiple) *</label>
-                                        <div className="flex flex-col gap-3">
-                                            <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" value="Sangre Total" checked={datosMuestra.tipoDonacion.includes('Sangre Total')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
-                                                <span className="font-medium text-sm">Concentrado Globular (CG)</span>
-                                            </label>
-                                            <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" value="Concentrado Plaquetario" checked={datosMuestra.tipoDonacion.includes('Concentrado Plaquetario')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
-                                                <span className="font-medium text-sm">Concentrado Plaquetario (CP)</span>
-                                            </label>
-                                            <label className="flex items-center gap-3 cursor-pointer">
-                                                <input type="checkbox" value="Plasma Fresco Congelado" checked={datosMuestra.tipoDonacion.includes('Plasma Fresco Congelado')} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
-                                                <span className="font-medium text-sm">Plasma Fresco Congelado (PFC)</span>
-                                            </label>
-                                        </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Serial de Bolsa *</label>
+                                        <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. BOL-X99" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue bg-blue-50 font-mono uppercase" />
                                     </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Segmento (Tubuladura) *</label>
+                                        <input type="text" name="segmentoBolsa" value={datosMuestra.segmentoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. 1A" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue uppercase" />
+                                    </div>
+                                </div>
 
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Volumen Total (ml) *</label>
-                                        <input type="number" name="volumen" value={datosMuestra.volumen} onChange={handleCambioMuestra} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" />
+                                <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
+                                    <label className="block text-sm font-bold text-slate-700 mb-3">Fraccionamiento y Volumen (cc/ml) *</label>
+                                    <div className="flex flex-col gap-3">
+                                        {['Sangre Total', 'Concentrado Globular', 'Plasma Fresco Congelado', 'Concentrado Plaquetario'].map(f => (
+                                            <div key={f} className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-slate-200">
+                                                <label className="flex items-center gap-3 cursor-pointer flex-grow">
+                                                    <input type="checkbox" value={f} checked={datosMuestra.tipoDonacion.includes(f)} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
+                                                    <span className="font-medium text-sm text-slate-700">{f}</span>
+                                                </label>
+                                                
+                                                {datosMuestra.tipoDonacion.includes(f) && (
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="cc / ml" 
+                                                        value={datosMuestra.volumenes[f] || ''} 
+                                                        onChange={(e) => handleVolumenCambio(f, e.target.value)} 
+                                                        className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue text-sm font-bold text-center" 
+                                                        required 
+                                                    />
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Observaciones (Opcional)</label>
-                                    <textarea name="observaciones" value={datosMuestra.observaciones} onChange={handleCambioMuestra} placeholder="Ej. Venas de difícil acceso..." rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all resize-none text-sm sm:text-base"></textarea>
+                                    <label className="block text-xs font-semibold text-slate-600 mb-1">Observaciones</label>
+                                    <textarea name="observaciones" value={datosMuestra.observaciones} onChange={handleCambioMuestra} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue resize-none"></textarea>
                                 </div>
                             </form>
                         </div>
 
-                        <div className="bg-slate-50 border-t border-slate-200 px-4 sm:px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
-                            <button type="button" onClick={() => navigate('/buscar')} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 transition-all border-none bg-transparent cursor-pointer text-sm sm:text-base text-center">
-                                Omitir
-                            </button>
-                            <button form="form-muestra" type="submit" className="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-sm border-none cursor-pointer text-sm sm:text-base text-center">
-                                Finalizar y Enviar a Cuarentena
+                        <div className="bg-slate-50 border-t border-slate-200 px-4 sm:px-6 py-4 flex justify-end gap-3">
+                            <button form="form-muestra" type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl border-none cursor-pointer">
+                                Guardar y Enviar a Cuarentena
                             </button>
                         </div>
                     </div>

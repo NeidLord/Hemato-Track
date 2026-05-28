@@ -5,7 +5,7 @@ import { obtenerUsuarios } from '../utils/data';
 function Login({ onLogin }) {
     const [rol, setRol] = useState('usuario');
     
-    // 👇 ESTA LÍNEA FUE CORREGIDA (Debe coincidir exacto con la base de datos)
+    // Debe coincidir exacto con la base de datos
     const [banco, setBanco] = useState('Banco de Sangre Dr. Loranzo Hands');
     
     const [iniciales, setIniciales] = useState('');
@@ -26,9 +26,11 @@ function Login({ onLogin }) {
         let usuarioValido = null;
 
         if (rol === 'admin') {
-            usuarioValido = usuarios.find(u => u.rol === 'admin' && u.banco === banco && u.password === password);
+            // PESTAÑA ADMIN: Solo deja entrar al director (cuenta con iniciales 'ADMIN')
+            usuarioValido = usuarios.find(u => u.banco === banco && u.iniciales === 'ADMIN' && u.password === password);
         } else {
-            usuarioValido = usuarios.find(u => u.rol === 'usuario' && u.banco === banco && u.iniciales.toLowerCase() === iniciales.toLowerCase() && u.password === password);
+            // PESTAÑA LICENCIADO: Deja entrar a cualquier licenciado, tenga rol 'admin' o 'usuario'
+            usuarioValido = usuarios.find(u => u.banco === banco && u.iniciales.toLowerCase() === iniciales.toLowerCase() && u.password === password);
         }
 
         if (usuarioValido) {
@@ -51,15 +53,14 @@ function Login({ onLogin }) {
                 </div>
 
                 <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6">
-                    <button type="button" onClick={() => setRol('usuario')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${rol === 'usuario' ? 'bg-white text-med-blue shadow-sm' : 'text-slate-500'}`}>👨‍⚕️ Licenciado</button>
-                    <button type="button" onClick={() => setRol('admin')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${rol === 'admin' ? 'bg-white text-med-blue shadow-sm' : 'text-slate-500'}`}>⚙️ Admin</button>
+                    <button type="button" onClick={() => setRol('usuario')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${rol === 'usuario' ? 'bg-white text-med-blue shadow-sm' : 'text-slate-500 cursor-pointer'}`}>👨‍⚕️ Licenciado</button>
+                    <button type="button" onClick={() => setRol('admin')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${rol === 'admin' ? 'bg-white text-med-blue shadow-sm' : 'text-slate-500 cursor-pointer'}`}>⚙️ Panel Maestro</button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Seleccione la Sede</label>
                         <select value={banco} onChange={(e) => setBanco(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-med-blue bg-white">
-                            {/* El usuario ve "Unidad CHET", pero el sistema envía el value corto */}
                             <option value="Banco de Sangre Dr. Loranzo Hands">Banco de Sangre Dr. Loranzo Hands Unidad CHET</option>
                             <option value="Banco de Sangre Dr. Miguel Patetta">Banco de Sangre Dr. Miguel Patetta Queirolo</option>
                             <option value="Banco de Sangre Dr. José Luis Pérez">Banco de Sangre Dr. José Luis Pérez Requejo</option>
@@ -80,7 +81,7 @@ function Login({ onLogin }) {
 
                     {error && <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg text-center font-medium">{error}</div>}
 
-                    <button type="submit" className="w-full bg-med-blue hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl transition-all cursor-pointer">
+                    <button type="submit" className="w-full bg-med-blue hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl transition-all cursor-pointer border-none">
                         Ingresar
                     </button>
                 </form>

@@ -1,4 +1,4 @@
-// src/pages/CargarSerologia.jsx
+// src/Pages/CargarSerologia.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerMuestras, actualizarMuestra, actualizarDonante } from '../utils/data';
@@ -11,7 +11,7 @@ function CargarSerologia() {
 
     const [datosSerologia, setDatosSerologia] = useState({
         grupoSanguineo: '',
-        vih: '', htlv: '', ch: '', av: '', coreb: '', hcv: '', sifilis: '',
+        hiv: '', htlv: '', ch: '', av: '', coreb: '', hcv: '', sifilis: '',
         observaciones: ''
     });
 
@@ -20,13 +20,13 @@ function CargarSerologia() {
         setError('');
 
         const muestras = await obtenerMuestras();
-        const encontrada = muestras.find(m => m.id === codigoBolsa);
+        const encontrada = muestras.find(m => m.id === codigoBolsa || m.codigo_bolsa === codigoBolsa);
 
         if (encontrada) {
             setMuestra(encontrada);
             setDatosSerologia({
-                grupoSanguineo: encontrada.grupoSanguineo || '',
-                vih: encontrada.vih || '', htlv: encontrada.htlv || '', ch: encontrada.ch || '', 
+                grupoSanguineo: encontrada.grupo_sanguineo || encontrada.grupoSanguineo || '',
+                hiv: encontrada.hiv || '', htlv: encontrada.htlv || '', ch: encontrada.ch || '', 
                 av: encontrada.av || '', coreb: encontrada.coreb || '', hcv: encontrada.hcv || '', 
                 sifilis: encontrada.sifilis || '', observaciones: encontrada.observaciones || ''
             });
@@ -43,23 +43,40 @@ function CargarSerologia() {
 
     const handleGuardar = async (e) => {
         e.preventDefault();
-
+        
+        // Formato exacto que la base de datos espera
         const actualizada = {
-            ...muestra,
-            ...datosSerologia,
+            id: muestra.codigo_bolsa || muestra.id || codigoBolsa,
+            codigo_bolsa: muestra.codigo_bolsa || muestra.id || codigoBolsa,
             estado: 'Procesada',
-            fechaAnalisis: new Date().toISOString().split('T')[0]
+            fechaAnalisis: new Date().toISOString().split('T')[0],
+            grupoSanguineo: datosSerologia.grupoSanguineo,
+            hiv: datosSerologia.hiv,
+            htlv: datosSerologia.htlv,
+            ch: datosSerologia.ch,
+            av: datosSerologia.av,
+            coreb: datosSerologia.coreb,
+            hcv: datosSerologia.hcv,
+            sifilis: datosSerologia.sifilis,
+            observaciones: datosSerologia.observaciones
         };
 
-        await actualizarMuestra(actualizada);
+        // Guardamos en extracciones y VERIFICAMOS que Supabase lo acepte
+        const resultadoMuestra = await actualizarMuestra(actualizada);
 
-        if (datosSerologia.grupoSanguineo) {
-            await actualizarDonante(muestra.donanteCedula, { grupoSanguineo: datosSerologia.grupoSanguineo });
+        if (resultadoMuestra.exito) {
+            // Si guardó bien la muestra, actualizamos al donante
+            const cedulaDonante = muestra.donante_cedula || muestra.donanteCedula;
+            if (datosSerologia.grupoSanguineo && cedulaDonante) {
+                await actualizarDonante(cedulaDonante, { grupo_sanguineo: datosSerologia.grupoSanguineo });
+            }
+            alert('✅ Serologías guardadas correctamente en la base de datos.');
+            setMuestra(null); 
+            setCodigoBolsa('');
+        } else {
+            // Si Supabase lo rechaza, ahora sí te avisará
+            alert(`❌ Error al guardar: ${resultadoMuestra.mensaje}`);
         }
-
-        alert('Serologías completas guardadas correctamente.');
-        setMuestra(null);
-        setCodigoBolsa('');
     };
 
     return (
@@ -78,7 +95,7 @@ function CargarSerologia() {
                 <div className="absolute inset-0 bg-panal-ligero bg-repeat opacity-100 pointer-events-none"></div>
                 <div className="relative z-10 max-w-4xl mx-auto">
                     <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Laboratorio Serológico</h1>
-                    <p className="text-rose-100 text-sm sm:text-lg">Cargue los 7 marcadores reglamentarios.</p>
+                    <p className="text-rose-100 text-sm sm:text-lg">Cargue los resultados de análisis de laboratorio por código de bolsa.</p>
                 </div>
             </div>
 
@@ -87,54 +104,67 @@ function CargarSerologia() {
                     <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-end">
                         <div className="flex-grow w-full">
                             <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Código de Bolsa</label>
-                            <input type="text" value={codigoBolsa} onChange={(e) => setCodigoBolsa(e.target.value)} placeholder="Ej. BOL-2026-X99" className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 uppercase font-mono" />
+                            <input type="text" value={codigoBolsa} onChange={(e) => setCodigoBolsa(e.target.value)} placeholder="Ej. BOL-X99" className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 uppercase font-mono" />
                         </div>
                         <button type="submit" className="w-full sm:w-auto bg-med-accent hover:bg-rose-800 text-white font-bold py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer">
                             Buscar
                         </button>
                     </form>
+                    {error && (
+                        <div className="mt-5 bg-red-50 p-4 rounded-xl border border-red-200 flex items-center gap-3">
+                            <span className="text-2xl">⚠️</span>
+                            <p className="font-bold text-red-700">{error}</p>
+                        </div>
+                    )}
                 </div>
 
                 {muestra && (
                     <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 sm:p-8">
                         <form onSubmit={handleGuardar} className="space-y-6">
-                            {/* Grupo Sanguineo */}
                             <div>
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Grupo Sanguíneo</h4>
-                                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
-                                        <label key={g} className={`flex items-center justify-center py-2 rounded-lg border-2 cursor-pointer ${datosSerologia.grupoSanguineo === g ? 'border-med-accent bg-rose-50 text-med-accent font-bold' : 'border-slate-200'}`}>
-                                            <input type="radio" name="grupoSanguineo" value={g} checked={datosSerologia.grupoSanguineo === g} onChange={handleCambio} className="sr-only" />
-                                            {g}
-                                        </label>
-                                    ))}
-                                </div>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Grupo Sanguíneo Definitivo</h4>
+                                <select name="grupoSanguineo" value={datosSerologia.grupoSanguineo} onChange={handleCambio} required className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-med-accent text-lg font-bold">
+                                    <option value="">Seleccione Tipiaje Exacto...</option>
+                                    {/* MANTENEMOS EL TEXTO LARGO, PERO ENVIAMOS EL VALUE CORTO (VARCHAR 5) */}
+                                    <option value="O+">O RH Positivo</option>
+                                    <option value="O-">O RH Negativo</option>
+                                    <option value="A+">A RH Positivo</option>
+                                    <option value="A-">A RH Negativo</option>
+                                    <option value="B+">B RH Positivo</option>
+                                    <option value="B-">B RH Negativo</option>
+                                    <option value="AB+">AB RH Positivo</option>
+                                    <option value="AB-">AB RH Negativo</option>
+                                </select>
                             </div>
 
-                            {/* Las 7 Serologías */}
                             <div>
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Marcadores Serológicos</h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {[
-                                        { key: 'vih', label: 'VIH' }, { key: 'htlv', label: 'HTLV' },
+                                        { key: 'hiv', label: 'VIH' }, { key: 'htlv', label: 'HTLV' },
                                         { key: 'ch', label: 'Chagas (CH)' }, { key: 'av', label: 'Antígeno V. (AV)' },
                                         { key: 'coreb', label: 'Core B' }, { key: 'hcv', label: 'HCV' },
                                         { key: 'sifilis', label: 'Sífilis' }
                                     ].map(s => (
-                                        <div key={s.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                            <span className="text-sm font-medium">{s.label}</span>
-                                            <select name={s.key} value={datosSerologia[s.key]} onChange={handleCambio} className="px-3 py-1 rounded-lg border border-slate-300 bg-white text-sm" required>
-                                                <option value="">Seleccionar...</option>
-                                                <option value="Negativo">Negativo</option>
-                                                <option value="Positivo">Positivo</option>
+                                        <div key={s.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                            <span className="text-sm font-bold text-slate-700">{s.label}</span>
+                                            <select name={s.key} value={datosSerologia[s.key]} onChange={handleCambio} className="px-4 py-2 rounded-lg border bg-white font-medium" required>
+                                                <option value="">Resultado...</option>
+                                                <option value="Negativo">Negativo (-)</option>
+                                                <option value="Positivo">Positivo (+)</option>
                                             </select>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <button type="submit" className="w-full bg-med-accent hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-all border-none cursor-pointer">
-                                Guardar Resultados Completos
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">Observaciones</label>
+                                <textarea name="observaciones" value={datosSerologia.observaciones} onChange={handleCambio} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent resize-none"></textarea>
+                            </div>
+
+                            <button type="submit" className="w-full bg-med-accent text-white font-bold py-3.5 rounded-xl cursor-pointer border-none text-lg">
+                                Guardar Resultados
                             </button>
                         </form>
                     </div>
