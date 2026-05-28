@@ -119,8 +119,8 @@ function Inicio({ usuarioLogeado, onLogout }) {
               </div>
               <span className="text-slate-300 group-hover:text-slate-600 transition-colors">➔</span>
             </div>
-            <h3 className="font-bold text-lg sm:text-xl mb-2 text-slate-800">Ajustes del Sistema</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">Gestión de roles de usuario, accesos administrativos y configuración general de la plataforma.</p>
+            <h3 className="font-bold text-lg sm:text-xl mb-2 text-slate-800">Resumen General</h3>
+            <p className="text-slate-500 text-sm leading-relaxed">Estadísticas, configuración y reportes gerenciales.</p>
           </div>
 
         </div>
