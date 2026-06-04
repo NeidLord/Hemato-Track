@@ -148,11 +148,15 @@ export async function actualizarMuestra(muestra) {
   if (error) return { exito: false, mensaje: 'Error al actualizar panel serológico.' };
   return { exito: true, mensaje: 'Resultados de laboratorio guardados.' };
 }
+export function calcularDiasParaDonar(ultimaDonacion, sexo) {
+  // 120 días para mujeres (4 meses), 90 días para hombres (3 meses)
+  const diasEspera = (sexo === 'Femenino' || sexo === 'Mujer' || sexo === 'F') ? 120 : 90;
 
-export function calcularDiasParaDonar(ultimaDonacion) {
-  if (!ultimaDonacion) return -90;
+  if (!ultimaDonacion) return -diasEspera;
+  
   const hoy = new Date();
   const ultima = new Date(ultimaDonacion);
   const diasTranscurridos = Math.floor((hoy - ultima) / (1000 * 60 * 60 * 24));
-  return 90 - diasTranscurridos;
+  
+  return diasEspera - diasTranscurridos;
 }

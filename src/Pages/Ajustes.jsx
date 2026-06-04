@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { obtenerDonantes, obtenerMuestras } from '../utils/data';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 function TarjetaEstadistica({ titulo, valor, color }) {
     return (
@@ -15,14 +17,12 @@ function TarjetaEstadistica({ titulo, valor, color }) {
 function Ajustes() {
     const navigate = useNavigate();
     
-    // VERIFICACIÓN DE SEGURIDAD PARA EL CANDADO
     const authUser = JSON.parse(localStorage.getItem('lims_auth_user')) || {};
     const esAdmin = authUser.rol === 'admin';
 
     const [mostrarModalLimpiar, setMostrarModalLimpiar] = useState(false);
     const [tipoLimpiar, setTipoLimpiar] = useState('');
     
-    // Estados para los reportes
     const [tiempoReporte, setTiempoReporte] = useState('historico');
     const [correoDestino, setCorreoDestino] = useState('coordinacion.salud@gob.ve');
 
@@ -31,7 +31,6 @@ function Ajustes() {
         grupos: {}, serologiasPositivas: { vih: 0, sifilis: 0, chagas: 0 }, inventarioTotal: 0
     });
 
-    // DICCIONARIO PARA MOSTRAR NOMBRES LARGOS DE SANGRE
     const nombresGrupos = {
         'O+': 'O RH Positivo', 'O-': 'O RH Negativo',
         'A+': 'A RH Positivo', 'A-': 'A RH Negativo',
@@ -102,50 +101,171 @@ function Ajustes() {
         const extraccionesProcesadas = muestrasFiltradas.filter(m => m.estado === 'Procesada').length;
         const extraccionesPendientes = extraccionesTotales - extraccionesProcesadas;
 
-        const donantesTotales = donorsFiltrados.length;
-        let donantesNoAptos = 0;
-
-        donorsFiltrados.forEach(d => {
+        const donantesNoAptosSet = new Set();
+        todosDonantes.forEach(d => {
             const susMuestras = todasMuestras.filter(m => m.donanteCedula === d.cedula);
             const esNoApto = susMuestras.some(m => 
                 m.hiv === 'Positivo' || m.sifilis === 'Positivo' || m.ch === 'Positivo' ||
                 m.htlv === 'Positivo' || m.av === 'Positivo' || m.coreb === 'Positivo' || m.hcv === 'Positivo'
             );
-            if (esNoApto) donantesNoAptos++;
+            if (esNoApto) donantesNoAptosSet.add(d.cedula);
+        });
+
+        const donantesTotales = donorsFiltrados.length;
+        let donantesNoAptosCount = 0;
+        donorsFiltrados.forEach(d => {
+            if (donantesNoAptosSet.has(d.cedula)) donantesNoAptosCount++;
+        });
+        const donantesAptos = donantesTotales - donantesNoAptosCount;
+
+        let volSangreTotal = 0, volGlobular = 0, volPlasma = 0, volPlaquetas = 0;
+        let gruposCount = {};
+        let bolsasDetalle = [];
+
+        muestrasFiltradas.forEach(m => {
+            const cedula = m.donanteCedula || m.donante_cedula;
+            const isDonanteApto = !donantesNoAptosSet.has(cedula);
+            const isMuestraLimpia = m.estado === 'Procesada' && 
+                                    m.hiv !== 'Positivo' && m.sifilis !== 'Positivo' && 
+                                    m.ch !== 'Positivo' && m.htlv !== 'Positivo' && 
+                                    m.av !== 'Positivo' && m.coreb !== 'Positivo' && 
+                                    m.hcv !== 'Positivo';
+
+            if (isDonanteApto && isMuestraLimpia) {
+                volSangreTotal += (parseInt(m.volumen) || 0);
+                volGlobular += (parseInt(m.volumen_st) || 0);
+                volPlasma += (parseInt(m.volumen_pfc) || 0);
+                volPlaquetas += (parseInt(m.volumen_cp) || 0);
+
+                const grp = m.grupoSanguineo || m.grupo_sanguineo || 'Sin Tipiaje';
+                gruposCount[grp] = (gruposCount[grp] || 0) + 1;
+
+                bolsasDetalle.push({
+                    codigo: m.id || m.codigo_bolsa,
+                    segmento: m.segmento || 'N/A',
+                    grupo: grp,
+                    volTotal: m.volumen || 0,
+                    volGlobular: m.volumen_st || 0,
+                    volPlasma: m.volumen_pfc || 0,
+                    volPlaquetas: m.volumen_cp || 0,
+                    fecha: m.fechaRegistro || m.fecha_registro
+                });
+            }
         });
 
         return {
-            donantesTotales, donantesAptos: donantesTotales - donantesNoAptos, donantesNoAptos,
-            extraccionesTotales, extraccionesProcesadas, extraccionesPendientes
+            donantesTotales, donantesAptos, donantesNoAptos: donantesNoAptosCount,
+            extraccionesTotales, extraccionesProcesadas, extraccionesPendientes,
+            volumenes: { sangreTotal: volSangreTotal, globular: volGlobular, plasma: volPlasma, plaquetas: volPlaquetas },
+            grupos: gruposCount,
+            detalles: bolsasDetalle
         };
     };
 
-    const handleExportarExcel = async () => {
+    // --- NUEVA FUNCIÓN PARA GENERAR PDF ---
+    const handleExportarPDF = async () => {
         const metricas = await calcularMetricasReporte();
-        const hoy = new Date();
-        const separador = ",";
+        const hoy = new Date().toLocaleDateString();
+        
+        const doc = new jsPDF();
+        
+        // Encabezado del Documento
+        doc.setFontSize(18);
+        doc.setTextColor(30, 58, 138); // med-blue
+        doc.text("Reporte Gerencial y de Inventario", 14, 20);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Sistema Hemotransf | Periodo: ${tiempoReporte.toUpperCase()} | Fecha: ${hoy}`, 14, 28);
+        
+        // 1. Detalle de Bolsas
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text("1. Detalle de Bolsas (Aptas para Uso Clínico)", 14, 40);
+        
+        const tablaBolsasBody = metricas.detalles.map(b => [
+            b.codigo, b.segmento, nombresGrupos[b.grupo] || b.grupo,
+            b.volTotal, b.volGlobular, b.volPlasma, b.volPlaquetas, b.fecha
+        ]);
+        
+        autoTable(doc, {
+            startY: 45,
+            head: [['Código', 'Seg.', 'Grupo', 'S.Total (ml)', 'Globular(ml)', 'Plasma(ml)', 'Plaq(ml)', 'Fecha']],
+            body: tablaBolsasBody.length > 0 ? tablaBolsasBody : [['Sin datos', '', '', '', '', '', '', '']],
+            theme: 'striped',
+            headStyles: { fillColor: [159, 18, 57] }, // med-accent
+            styles: { fontSize: 8, cellPadding: 2 }
+        });
+        
+        let finalY = doc.lastAutoTable.finalY + 15;
+        
+        // Control de salto de página
+        if (finalY > 240) {
+            doc.addPage();
+            finalY = 20;
+        }
+        
+        // 2. Resumen Volúmenes y 3. Inventario (Lado a Lado)
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text("2. Volúmenes (ml)", 14, finalY);
+        
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Componente', 'Volumen Total']],
+            body: [
+                ['Sangre Total', metricas.volumenes.sangreTotal],
+                ['Concentrado Globular', metricas.volumenes.globular],
+                ['Plasma Fresco Congelado', metricas.volumenes.plasma],
+                ['Concentrado Plaquetario', metricas.volumenes.plaquetas],
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [30, 58, 138] }, // med-blue
+            margin: { left: 14 },
+            tableWidth: 80
+        });
+        
+        doc.setFontSize(14);
+        doc.text("3. Inventario de Bolsas", 110, finalY);
+        
+        const tablaGrupos = Object.entries(metricas.grupos).map(([g, c]) => [nombresGrupos[g] || g, c]);
+        
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Grupo Sanguíneo', 'Cant. Bolsas']],
+            body: tablaGrupos.length > 0 ? tablaGrupos : [['Sin datos', 0]],
+            theme: 'grid',
+            headStyles: { fillColor: [16, 185, 129] }, // emerald-500
+            margin: { left: 110 },
+            tableWidth: 80
+        });
 
-        const csvContenido = [
-            ["REPORTE GENERAL - SISTEMA HEMOTRANSF"],
-            ["Periodo:", tiempoReporte.toUpperCase()],
-            ["Fecha de Emision:", hoy.toLocaleDateString()],
-            [],
-            ["METRICA", "CANTIDAD"],
-            ["Donantes Totales Registrados", metricas.donantesTotales],
-            ["Donantes Clasificados como Aptos", metricas.donantesAptos],
-            ["Donantes Clasificados como No Aptos", metricas.donantesNoAptos],
-            ["Extracciones Totales en el Periodo", metricas.extraccionesTotales],
-            ["Extracciones Procesadas", metricas.extraccionesProcesadas],
-            ["Extracciones Pendientes", metricas.extraccionesPendientes]
-        ].map(fila => fila.join(separador)).join("\n");
+        // 4. Estadísticas Finales
+        let finalY2 = Math.max(doc.lastAutoTable.finalY, finalY + 40) + 15;
+        if (finalY2 > 260) {
+            doc.addPage();
+            finalY2 = 20;
+        }
 
-        const blob = new Blob(["\uFEFF" + csvContenido], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Reporte_Hemotransf_${tiempoReporte}_${hoy.toISOString().split('T')[0]}.csv`;
-        link.click();
-        URL.revokeObjectURL(url);
+        doc.setFontSize(14);
+        doc.text("4. Estadísticas de Donantes", 14, finalY2);
+        
+        autoTable(doc, {
+            startY: finalY2 + 5,
+            head: [['Métrica', 'Cantidad']],
+            body: [
+                ['Donantes Totales Registrados', metricas.donantesTotales],
+                ['Donantes Clasificados como Aptos', metricas.donantesAptos],
+                ['Donantes Rechazados (No Aptos)', metricas.donantesNoAptos]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [71, 85, 105] }, // slate-600
+            margin: { left: 14 },
+            tableWidth: 80
+        });
+        
+        // Guardar el archivo
+        doc.save(`Reporte_Hemotransf_${tiempoReporte}_${new Date().getTime()}.pdf`);
     };
 
     const handleEnviarCorreo = async () => {
@@ -156,27 +276,11 @@ function Ajustes() {
 
         const metricas = await calcularMetricasReporte();
         
-        const cuerpoCorreo = `Saludos cordiales,
-
-Por medio de la presente se remite el reporte estadístico del Banco de Sangre correspondiente al periodo: ${tiempoReporte.toUpperCase()}.
-
-📊 MÉTRICAS DE DONANTES
-• Donantes Totales: ${metricas.donantesTotales}
-• Donantes Aptos: ${metricas.donantesAptos}
-• Donantes No Aptos: ${metricas.donantesNoAptos}
-
-🩸 MÉTRICAS DE EXTRACCIONES
-• Extracciones Totales: ${metricas.extraccionesTotales}
-• Extracciones Procesadas: ${metricas.extraccionesProcesadas}
-• Extracciones Pendientes: ${metricas.extraccionesPendientes}
-
-Generado automáticamente por el Sistema Hemotransf.
-Fecha de emisión: ${new Date().toLocaleDateString()}
-Usuario responsable: ${authUser.nombre || 'Administrador'}
-`;
+        const cuerpoCorreo = `Saludos cordiales,\n\nPor medio de la presente se remite el reporte estadístico del Banco de Sangre correspondiente al periodo: ${tiempoReporte.toUpperCase()}.\n\n📊 MÉTRICAS DE DONANTES\n• Donantes Totales: ${metricas.donantesTotales}\n• Donantes Aptos: ${metricas.donantesAptos}\n• Donantes No Aptos: ${metricas.donantesNoAptos}\n\n🩸 MÉTRICAS DE EXTRACCIONES\n• Extracciones Totales: ${metricas.extraccionesTotales}\n• Extracciones Procesadas: ${metricas.extraccionesProcesadas}\n• Extracciones Pendientes: ${metricas.extraccionesPendientes}\n\nGenerado automáticamente por el Sistema Hemotransf.\nFecha de emisión: ${new Date().toLocaleDateString()}\nUsuario responsable: ${authUser.nombre || 'Administrador'}`;
 
         const enlaceMailto = `mailto:${correoDestino}?subject=Reporte Gerencial Hemotransf - ${new Date().toLocaleDateString()}&body=${encodeURIComponent(cuerpoCorreo)}`;
-        window.open(enlaceMailto, '_blank');
+        
+        window.location.href = enlaceMailto;
     };
 
     return (
@@ -216,7 +320,6 @@ Usuario responsable: ${authUser.nombre || 'Administrador'}
                             <p className="text-slate-500 text-sm">No hay datos de grupos sanguíneos.</p>
                         ) : (
                             <div className="space-y-3">
-                                {/* AQUÍ SE APLICA EL DICCIONARIO nombresGrupos */}
                                 {Object.entries(stats.grupos).sort((a, b) => b[1] - a[1]).map(([grupo, count]) => (
                                     <div key={grupo} className="flex items-center gap-3">
                                         <span className="w-32 font-bold text-med-accent text-xs">{nombresGrupos[grupo] || grupo}</span>
@@ -252,12 +355,11 @@ Usuario responsable: ${authUser.nombre || 'Administrador'}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    {/* BLOQUE IZQUIERDO: REPORTE EXCEL (Visible para todos) */}
                     <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6 flex flex-col">
                         <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                            📑 Reporte Local (Excel)
+                            📑 Reporte Local (PDF)
                         </h3>
-                        <p className="text-sm text-slate-500 mb-4">Descargue el resumen estadístico a su computadora según el periodo seleccionado.</p>
+                        <p className="text-sm text-slate-500 mb-4">Descargue el resumen estadístico a su computadora en formato PDF según el periodo seleccionado.</p>
                         
                         <div className="flex gap-3 mb-4 mt-auto">
                             <select 
@@ -271,12 +373,11 @@ Usuario responsable: ${authUser.nombre || 'Administrador'}
                             </select>
                         </div>
 
-                        <button onClick={handleExportarExcel} className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
-                            📥 Descargar Excel (.csv)
+                        <button onClick={handleExportarPDF} className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
+                            📥 Descargar PDF
                         </button>
                     </div>
 
-                    {/* BLOQUE DERECHO: NOTIFICAR CORREO (Con validación de candado) */}
                     <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-4 sm:p-6 flex flex-col">
                         <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
                             📧 Notificar al Ente Superior
@@ -333,7 +434,6 @@ Usuario responsable: ${authUser.nombre || 'Administrador'}
                 </div>
             </div>
 
-            {/* MODAL LIMPIAR DATOS OCULTO/MANTENIDO POR ESTRUCTURA */}
             {mostrarModalLimpiar && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">

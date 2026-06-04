@@ -19,13 +19,14 @@ function CargarSerologia() {
         e.preventDefault();
         setError('');
 
-        // LA MAGIA ESTÁ AQUÍ: Forzamos mayúsculas y cortamos espacios fantasmas del celular
         const terminoBusqueda = codigoBolsa.trim().toUpperCase();
-
         const muestras = await obtenerMuestras();
+        
+        // AHORA BUSCA TANTO POR CÓDIGO COMO POR SEGMENTO
         const encontrada = muestras.find(m => 
             (m.id && m.id.toUpperCase() === terminoBusqueda) || 
-            (m.codigo_bolsa && m.codigo_bolsa.toUpperCase() === terminoBusqueda)
+            (m.codigo_bolsa && m.codigo_bolsa.toUpperCase() === terminoBusqueda) ||
+            (m.segmento && m.segmento.toUpperCase() === terminoBusqueda)
         );
 
         if (encontrada) {
@@ -38,7 +39,7 @@ function CargarSerologia() {
             });
         } else {
             setMuestra(null);
-            setError('Bolsa no encontrada. Verifique el código.');
+            setError('Bolsa o Segmento no encontrado. Verifique el código.');
         }
     };
 
@@ -50,7 +51,6 @@ function CargarSerologia() {
     const handleGuardar = async (e) => {
         e.preventDefault();
         
-        // Formato exacto que la base de datos espera
         const actualizada = {
             id: muestra.codigo_bolsa || muestra.id || codigoBolsa,
             codigo_bolsa: muestra.codigo_bolsa || muestra.id || codigoBolsa,
@@ -67,11 +67,9 @@ function CargarSerologia() {
             observaciones: datosSerologia.observaciones
         };
 
-        // Guardamos en extracciones y VERIFICAMOS que Supabase lo acepte
         const resultadoMuestra = await actualizarMuestra(actualizada);
 
         if (resultadoMuestra.exito) {
-            // Si guardó bien la muestra, actualizamos al donante
             const cedulaDonante = muestra.donante_cedula || muestra.donanteCedula;
             if (datosSerologia.grupoSanguineo && cedulaDonante) {
                 await actualizarDonante(cedulaDonante, { grupo_sanguineo: datosSerologia.grupoSanguineo });
@@ -80,7 +78,6 @@ function CargarSerologia() {
             setMuestra(null); 
             setCodigoBolsa('');
         } else {
-            // Si Supabase lo rechaza, ahora sí te avisará
             alert(`❌ Error al guardar: ${resultadoMuestra.mensaje}`);
         }
     };
@@ -107,12 +104,18 @@ function CargarSerologia() {
 
             <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-20 sm:-mt-24 relative z-0">
                 <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-5 sm:p-6 border border-slate-100 mb-6 sm:mb-8">
-                    <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-end">
+                    <form onSubmit={handleBuscar} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center sm:items-end">
                         <div className="flex-grow w-full">
-                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Código de Bolsa</label>
-                            <input type="text" value={codigoBolsa} onChange={(e) => setCodigoBolsa(e.target.value)} placeholder="Ej. BOL-X99" className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 uppercase font-mono" />
+                            <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1 sm:mb-2">Código de Bolsa o Segmento</label>
+                            <input 
+                                type="text" 
+                                value={codigoBolsa} 
+                                onChange={(e) => setCodigoBolsa(e.target.value.toUpperCase())} 
+                                placeholder="Ej. BOL-X99 o 1A" 
+                                className="w-full px-4 py-3 sm:py-3.5 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-med-accent focus:ring-4 focus:ring-rose-100 font-mono" 
+                            />
                         </div>
-                        <button type="submit" className="w-full sm:w-auto bg-med-accent hover:bg-rose-800 text-white font-bold py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer">
+                        <button type="submit" className="w-full sm:w-auto bg-med-accent hover:bg-rose-800 text-white font-bold py-3 sm:py-3.5 px-8 rounded-xl shadow-md border-none cursor-pointer">
                             Buscar
                         </button>
                     </form>
@@ -125,13 +128,12 @@ function CargarSerologia() {
                 </div>
 
                 {muestra && (
-                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 sm:p-8">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 sm:p-8 animate-in fade-in slide-in-from-bottom-4">
                         <form onSubmit={handleGuardar} className="space-y-6">
                             <div>
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Grupo Sanguíneo Definitivo</h4>
                                 <select name="grupoSanguineo" value={datosSerologia.grupoSanguineo} onChange={handleCambio} required className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-med-accent text-lg font-bold">
                                     <option value="">Seleccione Tipiaje Exacto...</option>
-                                    {/* MANTENEMOS EL TEXTO LARGO, PERO ENVIAMOS EL VALUE CORTO (VARCHAR 5) */}
                                     <option value="O+">O RH Positivo</option>
                                     <option value="O-">O RH Negativo</option>
                                     <option value="A+">A RH Positivo</option>
@@ -152,9 +154,9 @@ function CargarSerologia() {
                                         { key: 'coreb', label: 'Core B' }, { key: 'hcv', label: 'HCV' },
                                         { key: 'sifilis', label: 'Sífilis' }
                                     ].map(s => (
-                                        <div key={s.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                        <div key={s.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 p-3 bg-slate-50 rounded-xl border border-slate-200">
                                             <span className="text-sm font-bold text-slate-700">{s.label}</span>
-                                            <select name={s.key} value={datosSerologia[s.key]} onChange={handleCambio} className="px-4 py-2 rounded-lg border bg-white font-medium" required>
+                                            <select name={s.key} value={datosSerologia[s.key]} onChange={handleCambio} className="w-full sm:w-auto px-4 py-2 rounded-lg border bg-white font-medium" required>
                                                 <option value="">Resultado...</option>
                                                 <option value="Negativo">Negativo (-)</option>
                                                 <option value="Positivo">Positivo (+)</option>
@@ -169,7 +171,7 @@ function CargarSerologia() {
                                 <textarea name="observaciones" value={datosSerologia.observaciones} onChange={handleCambio} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-accent resize-none"></textarea>
                             </div>
 
-                            <button type="submit" className="w-full bg-med-accent text-white font-bold py-3.5 rounded-xl cursor-pointer border-none text-lg">
+                            <button type="submit" className="w-full bg-med-accent hover:bg-rose-700 text-white font-bold py-3.5 rounded-xl cursor-pointer border-none text-lg transition-colors">
                                 Guardar Resultados
                             </button>
                         </form>

@@ -15,7 +15,7 @@ function NotificarDonantes() {
             const muestras = await obtenerMuestras();
 
             const procesados = donors.map(d => {
-                const dias = calcularDiasParaDonar(d.fechaDonacion);
+                const dias = calcularDiasParaDonar(d.fechaDonacion, d.sexo);
                 const muestrasDonante = muestras.filter(m => m.donanteCedula === d.cedula && m.estado === 'Procesada');
                 const grupo = d.grupoSanguineo || muestrasDonante[muestrasDonante.length - 1]?.grupoSanguineo;
                 return {
@@ -54,7 +54,6 @@ function NotificarDonantes() {
         total: donorsConEstado.length
     }), [donorsConEstado]);
 
-    // --- LÓGICA DE CORREO CON EL NUEVO MENSAJE DEL CLIENTE ---
     const handleNotificar = (donante) => {
         if (!donante.correo) {
             alert(`⚠️ El donante ${donante.nombre} ${donante.apellido} no tiene un correo electrónico registrado en el sistema. Debe contactarlo por otros medios o actualizar su ficha.`);
@@ -65,33 +64,15 @@ function NotificarDonantes() {
         let mensaje = '';
 
         if (donante.puedeDonar) {
-            mensaje = `¡Hola, ${donante.nombre} ${donante.apellido}!
-
-El programa Sangre Segura del estado Carabobo no olvida que eres un héroe. Gracias a tu donación ayudaste a salvar vidas. 
-
-Hoy ya puedes volver a donar y ser el milagro de alguien más.
-
-Tu grupo sanguíneo (${donante.grupoSanguineo || 'el cual tenemos registrado'}) es de suma importancia para nuestro inventario y puede hacer la diferencia en emergencias. Te invitamos a acercarte a nuestro Banco de Sangre cuando tengas disponibilidad.
-
-Agradecemos profundamente tu compromiso, altruismo y solidaridad.
-
-Saludos cordiales,
-Equipo Médico - Sistema Hemotransf`;
+            mensaje = `¡Hola, ${donante.nombre} ${donante.apellido}!\n\nEl programa Sangre Segura del estado Carabobo no olvida que eres un héroe. Gracias a tu donación ayudaste a salvar vidas. \n\nHoy ya puedes volver a donar y ser el milagro de alguien más.\n\nTu grupo sanguíneo (${donante.grupoSanguineo || 'el cual tenemos registrado'}) es de suma importancia para nuestro inventario y puede hacer la diferencia en emergencias. Te invitamos a acercarte a nuestro Banco de Sangre cuando tengas disponibilidad.\n\nAgradecemos profundamente tu compromiso, altruismo y solidaridad.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemotransf`;
         } else {
-            mensaje = `Estimado/a ${donante.nombre} ${donante.apellido},
-
-Esperamos que se encuentre muy bien.
-
-Queremos agradecerle por su altruismo en su donación del ${donante.ultimaDonacion}. Le recordamos que su salud es nuestra prioridad, por lo que aún se encuentra en periodo de recuperación (ventana). 
-
-Estará apto/a para donar nuevamente en ${donante.diasParaDonar} días. Le enviaremos un nuevo correo cuando llegue el momento.
-
-Saludos cordiales,
-Equipo Médico - Sistema Hemotransf`;
+            mensaje = `Estimado/a ${donante.nombre} ${donante.apellido},\n\nEsperamos que se encuentre muy bien.\n\nQueremos agradecerle por su altruismo en su donación del ${donante.ultimaDonacion}. Le recordamos que su salud es nuestra prioridad, por lo que aún se encuentra en periodo de recuperación (ventana). \n\nEstará apto/a para donar nuevamente en ${donante.diasParaDonar} días. Le enviaremos un nuevo correo cuando llegue el momento.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemotransf`;
         }
 
         const enlaceMailto = `mailto:${donante.correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(mensaje)}`;
-        window.open(enlaceMailto, '_blank');
+        
+        // CORRECCIÓN MAGISTRAL PARA PC: Usamos window.location en vez de window.open
+        window.location.href = enlaceMailto;
     };
 
     return (

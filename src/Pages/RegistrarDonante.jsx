@@ -5,19 +5,18 @@ import { guardarDonante, guardarMuestra, actualizarDonante, verificarDuplicados 
 
 function RegistrarDonante() {
     const navigate = useNavigate();
-
     const [formData, setFormData] = useState({
         cedula: '', nombre: '', apellido: '', correo: '', direccion: '', fechaNacimiento: '', edad: '', sexo: '',
         embarazos: 'No', 
         telefonoPrefijo: '0412', telefonoCuerpo: '', enfermedades: ''
     });
-
-    const [errores, setErrores] = useState({}); // Estado para errores en tiempo real
-
+    const [errores, setErrores] = useState({}); 
     const [mostrarModalMuestra, setMostrarModalMuestra] = useState(false);
+    
     const [datosMuestra, setDatosMuestra] = useState({
         codigoBolsa: '', segmentoBolsa: '', tipoDonacion: ['Sangre Total'], 
-        volumenes: { 'Sangre Total': '450' }, observaciones: ''
+        volumenes: { 'Sangre Total': '450' }, observaciones: '',
+        fechaRegistro: new Date().toISOString().split('T')[0] // NUEVO: Fecha Editable
     });
 
     const calcularEdad = (fechaNac) => {
@@ -39,7 +38,6 @@ function RegistrarDonante() {
         }
     };
 
-    // VALIDACIÓN EN TIEMPO REAL AL SALIR DEL CAMPO (ONBLUR)
     const handleBlurValidacion = async (campo, valor) => {
         if (!valor) return;
         const validacion = await verificarDuplicados(
@@ -61,7 +59,6 @@ function RegistrarDonante() {
     const handleSubmitDonante = async (e) => {
         e.preventDefault();
         
-        // Bloqueo si hay errores detectados en tiempo real
         if (Object.keys(errores).length > 0) {
             alert('⚠️ Corrija los errores marcados en rojo antes de continuar.');
             return;
@@ -97,8 +94,8 @@ function RegistrarDonante() {
         const usuarioLogeado = JSON.parse(localStorage.getItem('lims_auth_user'));
         
         const muestra = {
-            id: datosMuestra.codigoBolsa,
-            segmento: datosMuestra.segmentoBolsa, // Aseguramos enviar el segmento
+            id: datosMuestra.codigoBolsa.toUpperCase(),
+            segmento: datosMuestra.segmentoBolsa.toUpperCase(), 
             donanteCedula: formData.cedula,
             donanteNombre: `${formData.nombre} ${formData.apellido}`,
             tipoDonacion: tiposFormateados,
@@ -107,13 +104,14 @@ function RegistrarDonante() {
             volumen_pfc: parseInt(datosMuestra.volumenes['Plasma Fresco Congelado']) || 0,
             volumen_cp: parseInt(datosMuestra.volumenes['Concentrado Plaquetario']) || 0,
             observaciones: datosMuestra.observaciones,
-            fechaRegistro: new Date().toISOString().split('T')[0],
+            fechaRegistro: datosMuestra.fechaRegistro, // Usamos la fecha seleccionada
             estado: 'Pendiente',
             bancoOrigen: usuarioLogeado?.banco || 'Desconocido',
             hemoterapistaEncargado: usuarioLogeado?.iniciales || 'Admin'
         };
 
         const resultado = await guardarMuestra(muestra);
+
         if (resultado.exito) {
             await actualizarDonante(formData.cedula, { fechaDonacion: muestra.fechaRegistro });
             alert(`Registro exitoso. La bolsa ${datosMuestra.codigoBolsa} (Seg: ${datosMuestra.segmentoBolsa}) entró en cuarentena.`);
@@ -128,6 +126,7 @@ function RegistrarDonante() {
         setDatosMuestra(prev => {
             let nuevosTipos = [...prev.tipoDonacion];
             let nuevosVolumenes = { ...prev.volumenes };
+
             if (checked) {
                 nuevosTipos.push(value);
                 if (!nuevosVolumenes[value]) nuevosVolumenes[value] = value === 'Sangre Total' ? '450' : '';
@@ -148,7 +147,6 @@ function RegistrarDonante() {
         setDatosMuestra(prev => ({ ...prev, [name]: value }));
     };
 
-    // Estilo dinámico para el botón de guardado (si hay error se ve bloqueado)
     const botonBloqueado = Object.keys(errores).length > 0;
 
     return (
@@ -278,7 +276,7 @@ function RegistrarDonante() {
                                 disabled={botonBloqueado}
                                 className={`w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md border-none ${botonBloqueado ? 'bg-slate-400 cursor-not-allowed' : 'bg-med-blue hover:bg-blue-800 active:scale-95 cursor-pointer'} text-sm sm:text-base`}
                             >
-                                Guardar y Registrar Extracción ➔
+                                Guardar y Registrar Extracción
                             </button>
                         </div>
                     </form>
@@ -288,31 +286,34 @@ function RegistrarDonante() {
             {/* --- MODAL DE EXTRACCIÓN --- */}
             {mostrarModalMuestra && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="bg-med-blue px-4 sm:px-6 py-4 flex justify-between items-center">
                             <h3 className="text-white font-bold text-base sm:text-lg flex items-center gap-2">
-                                <span>💉</span> Registro de Muestra
+                                <span>🩸</span> Registro de Muestra
                             </h3>
                             <button onClick={() => setMostrarModalMuestra(false)} className="text-blue-200 hover:text-white transition-colors text-2xl font-bold bg-transparent border-none cursor-pointer p-1">
-                                ×
+                                ✕
                             </button>
                         </div>
-
                         <div className="p-4 sm:p-6 overflow-y-auto">
                             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-5 flex gap-2 items-center">
                                 <span className="text-emerald-600 text-lg">✅</span>
                                 <p className="text-sm text-emerald-800">Donante <strong>{formData.nombre}</strong> guardado.</p>
                             </div>
-
+                            
                             <form id="form-muestra" onSubmit={handleGuardarMuestra} className="space-y-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1">Serial de Bolsa *</label>
                                         <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. BOL-X99" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue bg-blue-50 font-mono uppercase" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Segmento (Tubuladura) *</label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Segmento *</label>
                                         <input type="text" name="segmentoBolsa" value={datosMuestra.segmentoBolsa} onChange={handleCambioMuestra} required placeholder="Ej. 1A" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue uppercase" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">Fecha Extracción *</label>
+                                        <input type="date" name="fechaRegistro" value={datosMuestra.fechaRegistro} onChange={handleCambioMuestra} required className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue" />
                                     </div>
                                 </div>
 
@@ -320,8 +321,8 @@ function RegistrarDonante() {
                                     <label className="block text-sm font-bold text-slate-700 mb-3">Fraccionamiento y Volumen (cc/ml) *</label>
                                     <div className="flex flex-col gap-3">
                                         {['Sangre Total', 'Concentrado Globular', 'Plasma Fresco Congelado', 'Concentrado Plaquetario'].map(f => (
-                                            <div key={f} className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-slate-200">
-                                                <label className="flex items-center gap-3 cursor-pointer flex-grow">
+                                            <div key={f} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 bg-white p-2.5 rounded-lg border border-slate-200">
+                                                <label className="flex items-center gap-3 cursor-pointer">
                                                     <input type="checkbox" value={f} checked={datosMuestra.tipoDonacion.includes(f)} onChange={handleCheckboxCambio} className="w-5 h-5 text-med-blue rounded border-slate-300" />
                                                     <span className="font-medium text-sm text-slate-700">{f}</span>
                                                 </label>
@@ -332,7 +333,7 @@ function RegistrarDonante() {
                                                         placeholder="cc / ml" 
                                                         value={datosMuestra.volumenes[f] || ''} 
                                                         onChange={(e) => handleVolumenCambio(f, e.target.value)} 
-                                                        className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue text-sm font-bold text-center" 
+                                                        className="w-full sm:w-24 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue text-sm font-bold text-center" 
                                                         required 
                                                     />
                                                 )}
@@ -347,7 +348,6 @@ function RegistrarDonante() {
                                 </div>
                             </form>
                         </div>
-
                         <div className="bg-slate-50 border-t border-slate-200 px-4 sm:px-6 py-4 flex justify-end gap-3">
                             <button form="form-muestra" type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl border-none cursor-pointer">
                                 Guardar y Enviar a Cuarentena
