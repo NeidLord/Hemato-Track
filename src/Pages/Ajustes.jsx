@@ -24,7 +24,7 @@ function Ajustes() {
     const [tipoLimpiar, setTipoLimpiar] = useState('');
     
     const [tiempoReporte, setTiempoReporte] = useState('historico');
-    const [correoDestino, setCorreoDestino] = useState('coordinacion.salud@gob.ve');
+    const [correoDestino, setCorreoDestino] = useState('datadedonacionregionalcarabobo@gmail.com');
 
     const [stats, setStats] = useState({
         totalDonors: 0, totalMuestras: 0, procesadas: 0, pendientes: 0,
