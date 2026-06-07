@@ -24,6 +24,8 @@ function Ajustes() {
     const [tipoLimpiar, setTipoLimpiar] = useState('');
     
     const [tiempoReporte, setTiempoReporte] = useState('historico');
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaFin, setFechaFin] = useState('');
     const [correoDestino, setCorreoDestino] = useState('datadedonacionregionalcarabobo@gmail.com');
 
     const [stats, setStats] = useState({
@@ -95,6 +97,18 @@ function Ajustes() {
             const mesActual = hoy.toISOString().slice(0, 7); 
             muestrasFiltradas = todasMuestras.filter(m => m.fechaRegistro && m.fechaRegistro.startsWith(mesActual));
             donorsFiltrados = todosDonantes.filter(d => d.fechaDonacion && d.fechaDonacion.startsWith(mesActual));
+        } else if (tiempoReporte === 'personalizado' && fechaInicio && fechaFin) {
+            const inicio = new Date(fechaInicio);
+            const fin = new Date(fechaFin);
+            fin.setHours(23, 59, 59);
+            muestrasFiltradas = todasMuestras.filter(m => {
+                const f = new Date(m.fechaRegistro);
+                return f >= inicio && f <= fin;
+            });
+            donorsFiltrados = todosDonantes.filter(d => {
+                const f = new Date(d.fechaDonacion);
+                return f >= inicio && f <= fin;
+            });
         }
 
         const extraccionesTotales = muestrasFiltradas.length;
@@ -162,23 +176,24 @@ function Ajustes() {
         };
     };
 
-    // --- NUEVA FUNCIÓN PARA GENERAR PDF ---
     const handleExportarPDF = async () => {
         const metricas = await calcularMetricasReporte();
         const hoy = new Date().toLocaleDateString();
         
+        const textoPeriodo = tiempoReporte === 'personalizado' 
+            ? `DESDE ${fechaInicio} HASTA ${fechaFin}` 
+            : tiempoReporte.toUpperCase();
+        
         const doc = new jsPDF();
         
-        // Encabezado del Documento
         doc.setFontSize(18);
-        doc.setTextColor(30, 58, 138); // med-blue
+        doc.setTextColor(30, 58, 138); 
         doc.text("Reporte Gerencial y de Inventario", 14, 20);
         
         doc.setFontSize(11);
         doc.setTextColor(100);
-        doc.text(`Sistema Hemotransf | Periodo: ${tiempoReporte.toUpperCase()} | Fecha: ${hoy}`, 14, 28);
+        doc.text(`Sistema Hemato-Track | Periodo: ${textoPeriodo} | Fecha: ${hoy}`, 14, 28);
         
-        // 1. Detalle de Bolsas
         doc.setFontSize(14);
         doc.setTextColor(0);
         doc.text("1. Detalle de Bolsas (Aptas para Uso Clínico)", 14, 40);
@@ -193,21 +208,14 @@ function Ajustes() {
             head: [['Código', 'Seg.', 'Grupo', 'S.Total (ml)', 'Globular(ml)', 'Plasma(ml)', 'Plaq(ml)', 'Fecha']],
             body: tablaBolsasBody.length > 0 ? tablaBolsasBody : [['Sin datos', '', '', '', '', '', '', '']],
             theme: 'striped',
-            headStyles: { fillColor: [159, 18, 57] }, // med-accent
+            headStyles: { fillColor: [159, 18, 57] },
             styles: { fontSize: 8, cellPadding: 2 }
         });
         
         let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY > 240) { doc.addPage(); finalY = 20; }
         
-        // Control de salto de página
-        if (finalY > 240) {
-            doc.addPage();
-            finalY = 20;
-        }
-        
-        // 2. Resumen Volúmenes y 3. Inventario (Lado a Lado)
         doc.setFontSize(14);
-        doc.setTextColor(0);
         doc.text("2. Volúmenes (ml)", 14, finalY);
         
         autoTable(doc, {
@@ -220,7 +228,7 @@ function Ajustes() {
                 ['Concentrado Plaquetario', metricas.volumenes.plaquetas],
             ],
             theme: 'grid',
-            headStyles: { fillColor: [30, 58, 138] }, // med-blue
+            headStyles: { fillColor: [30, 58, 138] },
             margin: { left: 14 },
             tableWidth: 80
         });
@@ -235,17 +243,13 @@ function Ajustes() {
             head: [['Grupo Sanguíneo', 'Cant. Bolsas']],
             body: tablaGrupos.length > 0 ? tablaGrupos : [['Sin datos', 0]],
             theme: 'grid',
-            headStyles: { fillColor: [16, 185, 129] }, // emerald-500
+            headStyles: { fillColor: [16, 185, 129] },
             margin: { left: 110 },
             tableWidth: 80
         });
 
-        // 4. Estadísticas Finales
         let finalY2 = Math.max(doc.lastAutoTable.finalY, finalY + 40) + 15;
-        if (finalY2 > 260) {
-            doc.addPage();
-            finalY2 = 20;
-        }
+        if (finalY2 > 260) { doc.addPage(); finalY2 = 20; }
 
         doc.setFontSize(14);
         doc.text("4. Estadísticas de Donantes", 14, finalY2);
@@ -259,13 +263,12 @@ function Ajustes() {
                 ['Donantes Rechazados (No Aptos)', metricas.donantesNoAptos]
             ],
             theme: 'grid',
-            headStyles: { fillColor: [71, 85, 105] }, // slate-600
+            headStyles: { fillColor: [71, 85, 105] },
             margin: { left: 14 },
             tableWidth: 80
         });
         
-        // Guardar el archivo
-        doc.save(`Reporte_Hemotransf_${tiempoReporte}_${new Date().getTime()}.pdf`);
+        doc.save(`Reporte_Hemato-Track_${tiempoReporte}_${new Date().getTime()}.pdf`);
     };
 
     const handleEnviarCorreo = async () => {
@@ -276,9 +279,9 @@ function Ajustes() {
 
         const metricas = await calcularMetricasReporte();
         
-        const cuerpoCorreo = `Saludos cordiales,\n\nPor medio de la presente se remite el reporte estadístico del Banco de Sangre correspondiente al periodo: ${tiempoReporte.toUpperCase()}.\n\n📊 MÉTRICAS DE DONANTES\n• Donantes Totales: ${metricas.donantesTotales}\n• Donantes Aptos: ${metricas.donantesAptos}\n• Donantes No Aptos: ${metricas.donantesNoAptos}\n\n🩸 MÉTRICAS DE EXTRACCIONES\n• Extracciones Totales: ${metricas.extraccionesTotales}\n• Extracciones Procesadas: ${metricas.extraccionesProcesadas}\n• Extracciones Pendientes: ${metricas.extraccionesPendientes}\n\nGenerado automáticamente por el Sistema Hemotransf.\nFecha de emisión: ${new Date().toLocaleDateString()}\nUsuario responsable: ${authUser.nombre || 'Administrador'}`;
+        const cuerpoCorreo = `Saludos cordiales,\n\nPor medio de la presente se remite el reporte estadístico del Banco de Sangre correspondiente al periodo: ${tiempoReporte.toUpperCase()}.\n\n📊 MÉTRICAS DE DONANTES\n• Donantes Totales: ${metricas.donantesTotales}\n• Donantes Aptos: ${metricas.donantesAptos}\n• Donantes No Aptos: ${metricas.donantesNoAptos}\n\n🩸 MÉTRICAS DE EXTRACCIONES\n• Extracciones Totales: ${metricas.extraccionesTotales}\n• Extracciones Procesadas: ${metricas.extraccionesProcesadas}\n• Extracciones Pendientes: ${metricas.extraccionesPendientes}\n\nGenerado automáticamente por el Sistema Hemato-Track.\nFecha de emisión: ${new Date().toLocaleDateString()}\nUsuario responsable: ${authUser.nombre || 'Administrador'}`;
 
-        const enlaceMailto = `mailto:${correoDestino}?subject=Reporte Gerencial Hemotransf - ${new Date().toLocaleDateString()}&body=${encodeURIComponent(cuerpoCorreo)}`;
+        const enlaceMailto = `mailto:${correoDestino}?subject=Reporte Gerencial Hemato-Track - ${new Date().toLocaleDateString()}&body=${encodeURIComponent(cuerpoCorreo)}`;
         
         window.location.href = enlaceMailto;
     };
@@ -288,7 +291,7 @@ function Ajustes() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">📊</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemo-Track</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>
@@ -361,7 +364,7 @@ function Ajustes() {
                         </h3>
                         <p className="text-sm text-slate-500 mb-4">Descargue el resumen estadístico a su computadora en formato PDF según el periodo seleccionado.</p>
                         
-                        <div className="flex gap-3 mb-4 mt-auto">
+                        <div className="flex flex-col gap-3 mb-4 mt-auto">
                             <select 
                                 value={tiempoReporte} 
                                 onChange={(e) => setTiempoReporte(e.target.value)}
@@ -370,7 +373,14 @@ function Ajustes() {
                                 <option value="historico">Histórico Completo</option>
                                 <option value="mes">Este Mes</option>
                                 <option value="semana">Últimos 7 días</option>
+                                <option value="personalizado">Rango Personalizado</option>
                             </select>
+                            {tiempoReporte === 'personalizado' && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+                                    <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+                                </div>
+                            )}
                         </div>
 
                         <button onClick={handleExportarPDF} className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 border-none cursor-pointer">
@@ -416,7 +426,7 @@ function Ajustes() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                             <p className="text-slate-500">Sistema de Gestión</p>
-                            <p className="font-medium">Sistema Hemotransf Pro</p>
+                            <p className="font-medium">Sistema Hemo-Track Pro</p>
                         </div>
                         <div>
                             <p className="text-slate-500">Versión</p>

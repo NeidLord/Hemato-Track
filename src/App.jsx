@@ -33,7 +33,7 @@ function Inicio({ usuarioLogeado, onLogout }) {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-white tracking-wide">
-                  Sistema <span className="font-light text-blue-200">Hemotransf</span>
+                  Sistema <span className="font-light text-blue-200">Hemo-Track</span>
                 </h1>
                 <p className="text-xs sm:text-sm text-blue-300 font-bold uppercase mt-0.5">
                   {usuarioLogeado?.banco} • LIC. {usuarioLogeado?.nombre}

@@ -60,13 +60,13 @@ function NotificarDonantes() {
             return;
         }
 
-        const asunto = `Recordatorio de Donación de Sangre - Sistema Hemotransf`;
+        const asunto = `Recordatorio de Donación de Sangre - Sistema Hemato-Track`;
         let mensaje = '';
 
         if (donante.puedeDonar) {
-            mensaje = `¡Hola, ${donante.nombre} ${donante.apellido}!\n\nEl programa HemoTransf del estado Carabobo no olvida que eres un héroe. Gracias a tu donación ayudaste a salvar vidas. \n\nHoy ya puedes volver a donar y ser el milagro de alguien más.\n\nTu grupo sanguíneo (${donante.grupoSanguineo || 'el cual tenemos registrado'}) es de suma importancia para nuestro inventario y puede hacer la diferencia en emergencias. Te invitamos a acercarte a nuestro Banco de Sangre cuando tengas disponibilidad.\n\nAgradecemos profundamente tu compromiso, altruismo y solidaridad.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemotransf`;
+            mensaje = `¡Hola, ${donante.nombre} ${donante.apellido}!\n\nEl programa Hemato-Track del estado Carabobo no olvida que eres un héroe. Gracias a tu donación ayudaste a salvar vidas. \n\nHoy ya puedes volver a donar y ser el milagro de alguien más.\n\nTu grupo sanguíneo (${donante.grupoSanguineo || 'el cual tenemos registrado'}) es de suma importancia para nuestro inventario y puede hacer la diferencia en emergencias. Te invitamos a acercarte a nuestro Banco de Sangre cuando tengas disponibilidad.\n\nAgradecemos profundamente tu compromiso, altruismo y solidaridad.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemato-Tracks`;
         } else {
-            mensaje = `Estimado/a ${donante.nombre} ${donante.apellido},\n\nEsperamos que se encuentre muy bien.\n\nQueremos agradecerle por su altruismo en su donación del ${donante.ultimaDonacion}. Le recordamos que su salud es nuestra prioridad, por lo que aún se encuentra en periodo de recuperación (ventana). \n\nEstará apto/a para donar nuevamente en ${donante.diasParaDonar} días. Le enviaremos un nuevo correo cuando llegue el momento.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemotransf`;
+            mensaje = `Estimado/a ${donante.nombre} ${donante.apellido},\n\nEsperamos que se encuentre muy bien.\n\nQueremos agradecerle por su altruismo en su donación del ${donante.ultimaDonacion}. Le recordamos que su salud es nuestra prioridad, por lo que aún se encuentra en periodo de recuperación (ventana). \n\nEstará apto/a para donar nuevamente en ${donante.diasParaDonar} días. Le enviaremos un nuevo correo cuando llegue el momento.\n\nSaludos cordiales,\nEquipo Médico - Sistema Hemato-Tracks`;
         }
 
         const enlaceMailto = `mailto:${donante.correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(mensaje)}`;
@@ -80,7 +80,7 @@ function NotificarDonantes() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">✉️</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemato-Track</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>

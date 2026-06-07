@@ -179,7 +179,7 @@ function BuscarDonante({ usuarioLogeado }) {
             <nav className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2">
                     <span className="text-xl">🩸</span>
-                    <span className="font-bold text-lg text-med-blue">Sistema Hemotransf</span>
+                    <span className="font-bold text-lg text-med-blue">Sistema Hemato-Track</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← Volver
@@ -501,11 +501,29 @@ function BuscarDonante({ usuarioLogeado }) {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold mb-1">Serial Bolsa *</label>
-                                    <input type="text" name="codigoBolsa" value={datosMuestra.codigoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, codigoBolsa: e.target.value.toUpperCase()})} required className="w-full p-3 border rounded-xl uppercase font-mono bg-blue-50" placeholder="BOL-X99"/>
+                                        <input 
+                                            type="text" 
+                                            name="codigoBolsa" 
+                                            value={datosMuestra.codigoBolsa} 
+                                            onChange={(e) => setDatosMuestra({...datosMuestra, codigoBolsa: e.target.value.toUpperCase()})} 
+                                            maxLength="50" 
+                                            required 
+                                            className="w-full p-3 border rounded-xl uppercase font-mono bg-blue-50" 
+                                            placeholder="BOL-X99"
+                                        />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold mb-1">Segmento *</label>
-                                    <input type="text" name="segmentoBolsa" value={datosMuestra.segmentoBolsa} onChange={(e) => setDatosMuestra({...datosMuestra, segmentoBolsa: e.target.value.toUpperCase()})} required className="w-full p-3 border rounded-xl uppercase" placeholder="Ej. 1A"/>
+                                        <input 
+                                            type="text" 
+                                            name="segmentoBolsa" 
+                                            value={datosMuestra.segmentoBolsa} 
+                                            onChange={(e) => setDatosMuestra({...datosMuestra, segmentoBolsa: e.target.value.toUpperCase()})} 
+                                            maxLength="50" 
+                                            required 
+                                            className="w-full p-3 border rounded-xl uppercase" 
+                                            placeholder="Ej. 1A"
+                                        />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold mb-1">Fecha Extracción *</label>
@@ -540,7 +558,14 @@ function BuscarDonante({ usuarioLogeado }) {
 
                             <div>
                                 <label className="block text-xs font-bold mb-1">Observaciones</label>
-                                <textarea name="observaciones" value={datosMuestra.observaciones} onChange={(e) => setDatosMuestra({...datosMuestra, observaciones: e.target.value})} rows="2" className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue resize-none"></textarea>
+                                    <textarea 
+                                        name="observaciones" 
+                                        value={datosMuestra.observaciones} 
+                                        onChange={(e) => setDatosMuestra({...datosMuestra, observaciones: e.target.value})} 
+                                        rows="2" 
+                                        maxLength="50" 
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue resize-none"
+                                    ></textarea>
                             </div>
 
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-4">

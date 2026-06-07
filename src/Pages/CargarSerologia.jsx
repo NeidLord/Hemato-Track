@@ -87,7 +87,7 @@ function CargarSerologia() {
             <nav className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-10">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🧪</span>
-                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemotransf</span>
+                    <span className="font-bold text-lg sm:text-xl text-med-blue truncate">Sistema Hemato-Track</span>
                 </div>
                 <button onClick={() => navigate('/')} className="text-xs sm:text-sm font-medium text-slate-500 hover:text-med-blue bg-transparent border-none cursor-pointer">
                     ← <span className="hidden sm:inline">Volver</span>
