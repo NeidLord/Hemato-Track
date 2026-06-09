@@ -7,6 +7,7 @@ function RegistrarDonante() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         cedula: '', nombre: '', apellido: '', correo: '', direccion: '', fechaNacimiento: '', edad: '', sexo: '',
+        peso: '', // NUEVO: Estado para el peso
         embarazos: 'No', 
         telefonoPrefijo: '0412', telefonoCuerpo: '', enfermedades: ''
     });
@@ -65,10 +66,28 @@ function RegistrarDonante() {
         }
 
         const telefonoCompleto = `${formData.telefonoPrefijo}-${formData.telefonoCuerpo}`;
-        const donante = { ...formData, telefono: telefonoCompleto };
+        const donante = { ...formData, telefono: telefonoCompleto, peso: formData.peso};
 
         const resultado = await guardarDonante(donante);
         if (resultado.exito) {
+            // NUEVO: Cálculo automático del volumen de sangre según el peso
+            const pesoDonante = parseFloat(formData.peso) || 0;
+            let volumenCalculado = Math.round(pesoDonante * 8); // 8 ml por kg
+            
+            if (volumenCalculado > 450) {
+                volumenCalculado = 450; // Tope máximo legal/médico
+            }
+
+            // Actualizamos el estado del modal con el nuevo cálculo
+            setDatosMuestra(prev => ({
+                ...prev,
+                tipoDonacion: prev.tipoDonacion.includes('Sangre Total') ? prev.tipoDonacion : [...prev.tipoDonacion, 'Sangre Total'],
+                volumenes: {
+                    ...prev.volumenes,
+                    'Sangre Total': volumenCalculado.toString()
+                }
+            }));
+
             setMostrarModalMuestra(true);
         } else {
             alert(resultado.mensaje);
@@ -206,6 +225,15 @@ function RegistrarDonante() {
                                         <option value="Femenino">Femenino</option>
                                     </select>
                                 </div>
+                            </div>
+                            {/* NUEVO: Campo de Peso */}
+                            <div>
+                                <label className="block text-xs sm:text-sm font-semibold text-slate-600 mb-1">Peso (kg) *</label>
+                                <input 
+                                    type="number" name="peso" value={formData.peso} onChange={handleChange} required 
+                                    min="0" step="0.1" placeholder="Ej. 70" 
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-med-blue transition-all text-sm sm:text-base" 
+                                />
                             </div>
                             
                             {formData.sexo === 'Femenino' && (

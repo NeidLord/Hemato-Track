@@ -372,6 +372,10 @@ function BuscarDonante({ usuarioLogeado }) {
                                             <p className="font-semibold text-slate-800">{donante.sexo}</p>
                                         </div>
                                         <div>
+                                            <p className="text-sm text-slate-500 font-medium">Peso</p>
+                                            <p className="font-semibold text-slate-800">{donante.peso ? `${donante.peso} kg` : 'No registrado'}</p>
+                                        </div>
+                                        <div>
                                             <p className="text-sm text-slate-500 font-medium">Última Donación</p>
                                             <p className="font-semibold text-slate-800">{donante.fechaDonacion || 'N/A'}</p>
                                         </div>

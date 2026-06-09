@@ -40,18 +40,27 @@ function Ajustes() {
         'AB+': 'AB RH Positivo', 'AB-': 'AB RH Negativo'
     };
 
+    // Función para validar si la bolsa es apta (sin marcadores positivos)
+    const esBolsaApta = (m) => {
+        return !(m.hiv === 'Positivo' || m.sifilis === 'Positivo' || m.ch === 'Positivo' || 
+                m.htlv === 'Positivo' || m.av === 'Positivo' || m.coreb === 'Positivo' || m.hcv === 'Positivo');
+    };
+
     useEffect(() => {
         const cargarDatos = async () => {
             const donors = await obtenerDonantes();
             const muestras = await obtenerMuestras();
 
             const procesadas = muestras.filter(m => m.estado === 'Procesada');
+            const muestrasAptas = procesadas.filter(m => esBolsaApta(m));
             const pendientes = muestras.filter(m => m.estado !== 'Procesada');
 
-            const grupos = {};
-            donors.forEach(d => {
-                if (d.grupoSanguineo) {
-                    grupos[d.grupoSanguineo] = (grupos[d.grupoSanguineo] || 0) + 1;
+            // Cálculo de volúmenes por grupo (usando muestras aptas)
+            const gruposVolumenes = {};
+            muestrasAptas.forEach(m => {
+                const g = m.grupoSanguineo || m.grupo_sanguineo;
+                if (g) {
+                    gruposVolumenes[g] = (gruposVolumenes[g] || 0) + (parseInt(m.volumen) || 0);
                 }
             });
 
@@ -66,14 +75,14 @@ function Ajustes() {
                 totalMuestras: muestras.length,
                 procesadas: procesadas.length,
                 pendientes: pendientes.length,
-                grupos,
+                grupos: gruposVolumenes,
                 serologiasPositivas,
-                inventarioTotal: procesadas.reduce((acc, m) => acc + (parseInt(m.volumen) || 0), 0)
+                inventarioTotal: muestrasAptas.reduce((acc, m) => acc + (parseInt(m.volumen) || 0), 0)
             });
         };
         cargarDatos();
     }, []);
-
+    
     const handleLimpiarDatos = () => {
         alert('ℹ️ Por seguridad y para preservar la integridad de los datos en la presentación de grado, el borrado masivo ha sido desactivado.');
         setMostrarModalLimpiar(false);

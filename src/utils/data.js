@@ -72,7 +72,7 @@ export async function guardarDonante(donante) {
     cedula: donante.cedula, nombre: donante.nombre, apellido: donante.apellido,
     fecha_nacimiento: donante.fechaNacimiento, sexo: donante.sexo,
     telefono: donante.telefono, correo: donante.correo, direccion: donante.direccion,
-    enfermedades: donante.enfermedades, embarazos: donante.embarazos 
+    enfermedades: donante.enfermedades, embarazos: donante.embarazos , peso: donante.peso
   }]);
 
   if (error) return { exito: false, mensaje: 'Error al guardar en base de datos.' };
